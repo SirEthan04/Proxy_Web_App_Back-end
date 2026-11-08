@@ -1,0 +1,38 @@
+# .NET build output
+**/[Bb]in/
+**/[Oo]bj/
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+
+# Rider / Visual Studio local settings
+.idea/
+.vs/
+*.user
+*.suo
+*.sln.iml
+*.DotSettings.user
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+!.env.sample
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.pubxml.user
+
+# Temporary files and OS metadata
+*.log
+*.tmp
+*.temp
+*.bak
+~$*
+.DS_Store
+Thumbs.db
