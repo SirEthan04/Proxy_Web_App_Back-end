@@ -1,8 +1,18 @@
+using BodeGo.API.Shared.Infrastructure.Persistence.EFC;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddDbContext<BodeGoDbContext>(options =>
+{
+    var connection = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connection))
+        throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets.");
+    options.UseMySQL(connection);
+});
 
 var app = builder.Build();
 
