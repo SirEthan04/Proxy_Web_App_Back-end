@@ -1,4 +1,5 @@
 using BodeGo.API.Shared.Infrastructure.Persistence.EFC;
+using BodeGo.API.IAM.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+builder.Services.AddIam();
 builder.Services.AddDbContext<BodeGoDbContext>(options =>
 {
     var connection = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -23,6 +26,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.MapControllers();
 
 var summaries = new[]
 {
