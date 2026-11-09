@@ -18,7 +18,7 @@ public class Product
     public Product(Guid categoryId, ProductName name, Money salePrice, StockLevel minimumStock)
     {
         Id = Guid.NewGuid();
-        CategoryId = Validation.Id(categoryId, nameof(categoryId));
+        CategoryId = InventoryValidation.Id(categoryId);
         Name = name ?? throw new ArgumentNullException(nameof(name));
         SalePrice = salePrice ?? throw new ArgumentNullException(nameof(salePrice));
         MinimumStock = minimumStock ?? throw new ArgumentNullException(nameof(minimumStock));
