@@ -141,6 +141,17 @@ WHERE email = 'iam.verificacion@bodego.example' GROUP BY email;
 ```
 
 Las consultas no muestran hashes. La prueba automatizada verifica el hash en memoria.
+Las anotaciones de CreateUserResource y las validaciones de Application generan
+mensajes en español, incluidos los límites originales de 120/180 caracteres para
+nombre/correo y 12 a 128 para contraseña. IamValidationResponse personaliza la
+respuesta automática de ApiController solo para IAM: conserva ProblemDetails,
+errors, claves de campos y códigos HTTP, y traduce título, JSON e identificadores
+inválidos. Las respuestas 404 de usuario/rol y el conflicto de correo también están
+en español. Los controles de Scalar y los nombres del protocolo HTTP no se traducen.
+La integración usa además `iam.validacion-es@bodego.example` para verificar un POST
+válido después de los cambios de mensajes, con contraseña aleatoria y sin borrar
+registros. Si existe, lo reutiliza para evitar duplicados y no afirma una nueva alta.
+
 Queda pendiente acordar autenticacion/autorizacion, restringir roles administrativos,
 paginacion de listados y limites de solicitudes antes de un despliegue real. La carrera
 de correos duplicados se maneja en el repositorio, pero no se ha probado con cargas

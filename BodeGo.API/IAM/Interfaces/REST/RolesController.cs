@@ -23,6 +23,6 @@ public class RolesController(IRoleQueryService queries) : ControllerBase
     {
         if (id <= 0) return Problem(statusCode: 400, title: "El identificador debe ser positivo.");
         var role = await queries.Handle(new GetRoleByIdQuery(id), cancellationToken);
-        return role is null ? NotFound() : Ok(RoleResourceAssembler.From(role));
+        return role is null ? Problem(statusCode: 404, title: "No se encontró el rol solicitado.") : Ok(RoleResourceAssembler.From(role));
     }
 }

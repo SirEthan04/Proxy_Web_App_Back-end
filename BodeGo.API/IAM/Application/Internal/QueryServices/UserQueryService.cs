@@ -10,7 +10,7 @@ public class UserQueryService(IUserRepository users) : IUserQueryService
 
     public async Task<UserResult?> Handle(GetUserByIdQuery query, CancellationToken cancellationToken = default)
     {
-        if (query.Id == Guid.Empty) throw new ArgumentException("El identificador no puede estar vacio.");
+        if (query.Id == Guid.Empty) throw new ArgumentException("El identificador no puede estar vacío.");
         var user = await users.FindByIdAsync(query.Id, cancellationToken);
         return user is null ? null : UserResult.From(user);
     }

@@ -140,6 +140,68 @@ try
         Check(response.StatusCode == HttpStatusCode.BadRequest, "Invalid identifier must return 400.");
     }
     Check(await db.Users.CountAsync(u => u.Email == new EmailAddress(email)) == 1, "MySQL contains duplicate test users.");
+    async Task ExpectSpanishPost(object body, HttpStatusCode status, string message, string? key = null)
+    {
+        using var response = await http.PostAsJsonAsync("/api/v1/users", body);
+        Check(response.StatusCode == status, "Unexpected Spanish validation status.");
+        var text = await response.Content.ReadAsStringAsync();
+        Check(!text.Contains(temporaryPassword) && !text.Contains("passwordHash", StringComparison.OrdinalIgnoreCase)
+            && !text.Contains("password_hash", StringComparison.OrdinalIgnoreCase), "Sensitive data leaked in error.");
+        var problem = JsonDocument.Parse(text).RootElement;
+        if (key is not null)
+        {
+            Check(problem.GetProperty("title").GetString() == "Se produjeron uno o más errores de validación.", "Validation title is not Spanish.");
+            Check(problem.GetProperty("errors").GetProperty(key).EnumerateArray().Any(e => e.GetString() == message), "Expected field message was not found.");
+        }
+        else Check(problem.GetProperty("title").GetString() == message, "Expected Spanish error title was not found.");
+    }
+    object Body(string name, string address, string password, int roleId = 2) =>
+        new { name, email = address, password, roleId };
+    await ExpectSpanishPost(Body("", email, temporaryPassword), HttpStatusCode.BadRequest, "El nombre es obligatorio.", "Name");
+    await ExpectSpanishPost(Body("Prueba", "", temporaryPassword), HttpStatusCode.BadRequest, "El correo electrónico es obligatorio.", "Email");
+    await ExpectSpanishPost(Body("Prueba", "invalid", temporaryPassword), HttpStatusCode.BadRequest, "El formato del correo electrónico no es válido.");
+    await ExpectSpanishPost(Body("Prueba", email, ""), HttpStatusCode.BadRequest, "La contraseña es obligatoria.", "Password");
+    await ExpectSpanishPost(Body("Prueba", email, "short"), HttpStatusCode.BadRequest, "La contraseña debe tener al menos 12 caracteres.", "Password");
+    await ExpectSpanishPost(Body("Prueba", email, new string('x', 129)), HttpStatusCode.BadRequest, "La contraseña no debe superar los 128 caracteres.", "Password");
+    await ExpectSpanishPost(Body(new string('x', 121), email, temporaryPassword), HttpStatusCode.BadRequest, "El nombre no debe superar los 120 caracteres.", "Name");
+    await ExpectSpanishPost(Body("Prueba", new string('x', 181), temporaryPassword), HttpStatusCode.BadRequest, "El correo electrónico no debe superar los 180 caracteres.", "Email");
+    await ExpectSpanishPost(Body("Prueba", email, temporaryPassword), HttpStatusCode.Conflict, "El correo electrónico ya está registrado.");
+    await ExpectSpanishPost(Body("Prueba", email, temporaryPassword, int.MaxValue), HttpStatusCode.BadRequest, "El rol indicado no existe.");
+    foreach (var (json, key) in new[] { ("{", "$"), ("{\"roleId\":\"invalid\"}", "$.roleId") })
+    {
+        using var response = await http.PostAsync("/api/v1/users", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "Invalid JSON must return 400.");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Check(problem.GetProperty("errors").GetProperty(key)[0].GetString() ==
+            "El JSON de la solicitud no es válido. Revise los tipos y el formato de los campos.", "JSON binding error is not Spanish.");
+    }
+    using (var invalidId = await http.GetAsync("/api/v1/users/invalid"))
+    {
+        var problem = await invalidId.Content.ReadFromJsonAsync<JsonElement>();
+        Check(problem.GetProperty("errors").GetProperty("id")[0].GetString() == "El identificador no es válido.", "Identifier binding error is not Spanish.");
+    }
+    foreach (var (path, title) in new[] {
+        ($"/api/v1/users/{Guid.NewGuid()}", "No se encontró el usuario solicitado."),
+        ("/api/v1/roles/2147483647", "No se encontró el rol solicitado.") })
+    {
+        using var response = await http.GetAsync(path);
+        Check(response.StatusCode == HttpStatusCode.NotFound, "Expected localized 404.");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Check(problem.GetProperty("title").GetString() == title, "404 title is not Spanish.");
+    }
+    const string spanishTestEmail = "iam.validacion-es@bodego.example";
+    if (!await db.Users.AnyAsync(u => u.Email == new EmailAddress(spanishTestEmail)))
+    {
+        using var response = await http.PostAsJsonAsync("/api/v1/users", Body("Prueba validaciones español", spanishTestEmail, temporaryPassword));
+        Check(response.StatusCode == HttpStatusCode.Created && response.Headers.Location != null, "Valid Spanish registration must return 201.");
+        var result = await response.Content.ReadAsStringAsync();
+        Check(!result.Contains("password", StringComparison.OrdinalIgnoreCase) && !result.Contains(temporaryPassword), "Registration exposed credentials.");
+        Console.WriteLine("Spanish validation fixture inserted through POST 201; no existing records modified.");
+    }
+    else Console.WriteLine("Spanish validation fixture reused; no new POST 201 claimed for this fixture.");
+    Check(await db.Users.CountAsync(u => u.Email == new EmailAddress(spanishTestEmail)) == 1, "Spanish fixture was duplicated.");
+    await GetJson("/api/v1/roles");
+    await GetJson("/api/v1/users");
     Console.WriteLine($"OK: {checks} total checks, including HTTP and real MySQL. No records deleted.");
 }
 catch (Exception exception)

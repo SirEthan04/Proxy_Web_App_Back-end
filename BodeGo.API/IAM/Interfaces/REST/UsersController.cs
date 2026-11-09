@@ -49,8 +49,8 @@ public class UsersController(IUserCommandService commands, IUserQueryService que
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        if (id == Guid.Empty) return Problem(statusCode: 400, title: "El identificador no puede estar vacio.");
+        if (id == Guid.Empty) return Problem(statusCode: 400, title: "El identificador no puede estar vacío.");
         var user = await queries.Handle(new GetUserByIdQuery(id), cancellationToken);
-        return user is null ? NotFound() : Ok(UserResourceAssembler.From(user));
+        return user is null ? Problem(statusCode: 404, title: "No se encontró el usuario solicitado.") : Ok(UserResourceAssembler.From(user));
     }
 }

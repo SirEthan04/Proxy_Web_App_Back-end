@@ -12,13 +12,21 @@ public class UserCommandService(IUserRepository users, IRoleRepository roles, IP
 {
     public async Task<UserResult> Handle(CreateUserCommand command, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(command.Name) || command.Name.Trim().Length > 120)
-            throw new ArgumentException("El nombre es obligatorio y admite hasta 120 caracteres.");
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new ArgumentException("El nombre es obligatorio.");
+        if (command.Name.Trim().Length > 120)
+            throw new ArgumentException("El nombre no debe superar los 120 caracteres.");
+        if (string.IsNullOrWhiteSpace(command.Email))
+            throw new ArgumentException("El correo electrónico es obligatorio.");
         EmailAddress email;
         try { email = new EmailAddress(command.Email); }
-        catch (ArgumentException) { throw new ArgumentException("El correo electronico no es valido."); }
-        if (string.IsNullOrWhiteSpace(command.Password) || command.Password.Length is < 12 or > 128)
-            throw new ArgumentException("La contraseña debe tener entre 12 y 128 caracteres.");
+        catch (ArgumentException) { throw new ArgumentException("El formato del correo electrónico no es válido."); }
+        if (string.IsNullOrWhiteSpace(command.Password))
+            throw new ArgumentException("La contraseña es obligatoria.");
+        if (command.Password.Length < 12)
+            throw new ArgumentException("La contraseña debe tener al menos 12 caracteres.");
+        if (command.Password.Length > 128)
+            throw new ArgumentException("La contraseña no debe superar los 128 caracteres.");
         if (command.RoleId <= 0 || await roles.FindByIdAsync(command.RoleId, cancellationToken) is null)
             throw new RoleNotFoundException();
         if (await users.ExistsByEmailAsync(email, cancellationToken))
