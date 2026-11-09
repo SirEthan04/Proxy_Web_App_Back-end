@@ -15,6 +15,7 @@ public static class IamServiceCollectionExtensions
         services.AddScoped<IPasswordHashService, PasswordHashService>();
         services.AddScoped<IUserCommandService, UserCommandService>();
         services.AddScoped<IUserQueryService, UserQueryService>();
+        services.AddScoped<IRoleQueryService, RoleQueryService>();
         return services;
     }
 }

@@ -1,5 +1,6 @@
 using BodeGo.API.Shared.Infrastructure.Persistence.EFC;
 using BodeGo.API.IAM.Infrastructure;
+using BodeGo.API.IAM.Infrastructure.Persistence.EFC;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,13 @@ builder.Services.AddDbContext<BodeGoDbContext>(options =>
 });
 
 var app = builder.Build();
+if (args.Contains("--initialize-iam-roles"))
+{
+    if (!app.Environment.IsDevelopment())
+        throw new InvalidOperationException("La inicializacion de roles requiere Development.");
+    await app.Services.InitializeIamRolesAsync();
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
