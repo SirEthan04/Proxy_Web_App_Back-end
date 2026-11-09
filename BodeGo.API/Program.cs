@@ -1,5 +1,6 @@
 using BodeGo.API.Shared.Infrastructure.Persistence.EFC;
 using BodeGo.API.IAM.Infrastructure;
+using BodeGo.API.Inventory.Infrastructure;
 using BodeGo.API.IAM.Infrastructure.Persistence.EFC;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -15,6 +16,7 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document,
 }));
 builder.Services.AddControllers();
 builder.Services.AddIam();
+builder.Services.AddInventory();
 builder.Services.AddDbContext<BodeGoDbContext>(options =>
 {
     var connection = builder.Configuration.GetConnectionString("DefaultConnection");

@@ -10,8 +10,8 @@ public class Category
     public Category(string name, string? description = null)
     {
         Id = Guid.NewGuid();
-        Name = Validation.Text(name, 100, nameof(name));
-        Description = description is null ? null : Validation.Text(description, 255, nameof(description));
+        Name = InventoryValidation.Text(name, 100, "nombre de la categoría");
+        Description = description is null ? null : InventoryValidation.Text(description, 255, "texto de la descripción");
         Active = true;
     }
     public void Deactivate() => Active = false;
