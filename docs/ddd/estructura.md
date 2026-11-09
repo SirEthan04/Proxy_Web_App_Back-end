@@ -106,4 +106,5 @@ se ubican en `Application/Services` y sus implementaciones técnicas en Infrastr
    contratos deliberados y revisar cualquier nueva dependencia en el PR.
 
 Las carpetas vacías se versionan con `.gitkeep`; retirarlo cuando tengan contenido
-real es opcional. El ejemplo existente de weatherforecast permanece sin cambios.
+real es opcional. El endpoint de ejemplo weatherforecast fue retirado; las rutas
+implementadas se documentan en Scalar.

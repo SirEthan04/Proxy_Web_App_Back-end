@@ -8,10 +8,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace BodeGo.API.IAM.Interfaces.REST;
 
 [ApiController]
+[Tags("IAM")]
 [Route("api/v1/users")]
 public class UsersController(IUserCommandService commands, IUserQueryService queries) : ControllerBase
 {
     [HttpPost]
+    [ProducesResponseType<UserResource>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create([FromBody] CreateUserResource resource, CancellationToken cancellationToken)
     {
         try
@@ -35,10 +39,14 @@ public class UsersController(IUserCommandService commands, IUserQueryService que
     }
 
     [HttpGet]
+    [ProducesResponseType<IEnumerable<UserResource>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken) =>
         Ok((await queries.Handle(new GetUsersQuery(), cancellationToken)).Select(UserResourceAssembler.From));
 
     [HttpGet("{id}")]
+    [ProducesResponseType<UserResource>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         if (id == Guid.Empty) return Problem(statusCode: 400, title: "El identificador no puede estar vacio.");
