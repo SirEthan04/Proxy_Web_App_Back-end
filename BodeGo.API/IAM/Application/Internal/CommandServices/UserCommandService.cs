@@ -14,7 +14,9 @@ public class UserCommandService(IUserRepository users, IRoleRepository roles, IP
     {
         if (string.IsNullOrWhiteSpace(command.Name) || command.Name.Trim().Length > 120)
             throw new ArgumentException("El nombre es obligatorio y admite hasta 120 caracteres.");
-        var email = new EmailAddress(command.Email);
+        EmailAddress email;
+        try { email = new EmailAddress(command.Email); }
+        catch (ArgumentException) { throw new ArgumentException("El correo electronico no es valido."); }
         if (string.IsNullOrWhiteSpace(command.Password) || command.Password.Length is < 12 or > 128)
             throw new ArgumentException("La contraseña debe tener entre 12 y 128 caracteres.");
         if (command.RoleId <= 0 || await roles.FindByIdAsync(command.RoleId, cancellationToken) is null)

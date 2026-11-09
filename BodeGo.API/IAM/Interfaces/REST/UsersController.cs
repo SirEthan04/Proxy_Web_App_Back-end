@@ -28,9 +28,9 @@ public class UsersController(IUserCommandService commands, IUserQueryService que
         {
             return Problem(statusCode: 400, title: exception.Message);
         }
-        catch (ArgumentException)
+        catch (ArgumentException exception)
         {
-            return Problem(statusCode: 400, title: "Nombre, correo o contraseña invalidos.");
+            return Problem(statusCode: 400, title: exception.Message);
         }
     }
 
