@@ -3,7 +3,9 @@
 Base organizativa dentro de un único proyecto ASP.NET Core: `BodeGo.API`.
 Las carpetas delimitan responsabilidades; el compilador todavía no impide referencias
 entre capas. La revisión de Pull Requests debe comprobar estas reglas.
-No se implementan modelos, persistencia ni nuevos endpoints en esta base.
+La base inicial se completó posteriormente con modelos, mapeos EF y una migración.
+Consultar [estado de la base de datos](../database/tablas.md) para los detalles y
+los pasos de conexión; todavía no se implementan nuevos endpoints.
 
 ## Contextos y modelos previstos
 
@@ -16,7 +18,7 @@ No se implementan modelos, persistencia ni nuevos endpoints en esta base.
 | Monitoring | Alertas y su atención | Alert | Por definir según reglas de atención y persistencia | Por definir |
 | Reporting | Dashboard y reportes de consulta | No aplica | No aplica | No aplica |
 
-Esta tabla describe ubicaciones futuras; no declara clases ni relaciones EF.
+Esta tabla describe la ubicación y responsabilidad de los modelos implementados.
 Role y Category son catálogos; no se convierten automáticamente en Aggregate Roots.
 InventoryMovement es un registro inmutable, sin asignarle artificialmente un agregado.
 Dashboard y los reportes irán en `Reporting/Application/Model/ReadModels`.
@@ -58,7 +60,8 @@ BodeGo.API/<IAM|Inventory|Commercial|Operations|Monitoring>/
   aplicación y puertos de coordinación; no duplica contratos de `Domain/Services`.
   Las invariantes pertenecen a los modelos del dominio.
 - **Infrastructure:** implementa contratos y acceso técnico. `Persistence/EFC`
-  reserva la ubicación de EF Core, sin paquetes, DbContext ni migraciones todavía.
+  contiene los mapeos EF Core. El DbContext común y las migraciones están en
+  `Shared/Infrastructure/Persistence/EFC`.
 - **Interfaces/REST:** futuros controladores, recursos HTTP y transformaciones
   entre recursos y mensajes/resultados de aplicación. No expone entidades EF ni
   concentra reglas de negocio. Los controladores irán en `REST` cuando existan.
