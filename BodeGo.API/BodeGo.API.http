@@ -1,6 +1,6 @@
 @BodeGo.API_HostAddress = http://localhost:5281
 
-GET {{BodeGo.API_HostAddress}}/weatherforecast/
+GET {{BodeGo.API_HostAddress}}/api/v1/roles
 Accept: application/json
 
 ###
