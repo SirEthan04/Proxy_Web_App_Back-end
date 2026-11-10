@@ -9,6 +9,8 @@ public static class OperationsServiceCollectionExtensions
     {
         services.AddScoped<BodeGo.API.Operations.Application.Services.IInventoryMovementQueryService, BodeGo.API.Operations.Application.Internal.QueryServices.InventoryMovementQueryService>();
         services.AddScoped<IOperationsRepository, OperationsRepository>();
+        services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(BodeGo.API.Operations.Interfaces.REST.OperationsValidationResponse.Configure);
+        services.AddScoped<IWasteCommandService, BodeGo.API.Operations.Application.Internal.CommandServices.WasteCommandService>();
         services.AddScoped<IOperationsSession, OperationsSession>();
         return services;
     }
