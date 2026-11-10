@@ -6,6 +6,8 @@ using BodeGo.API.Commercial.Infrastructure;
 using BodeGo.API.IAM.Infrastructure.Persistence.EFC;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using BodeGo.API.Monitoring.Infrastructure;
+using BodeGo.API.Reporting.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +23,8 @@ builder.Services.AddIam();
 builder.Services.AddInventory();
 builder.Services.AddCommercial();
 builder.Services.AddOperations();
+builder.Services.AddMonitoring();
+builder.Services.AddReporting();
 builder.Services.AddDbContext<BodeGoDbContext>(options =>
 {
     var connection = builder.Configuration.GetConnectionString("DefaultConnection");
