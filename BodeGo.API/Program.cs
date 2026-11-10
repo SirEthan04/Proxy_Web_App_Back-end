@@ -10,6 +10,12 @@ using BodeGo.API.Monitoring.Infrastructure;
 using BodeGo.API.Reporting.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+const string frontendCorsPolicy = "BodeGoFrontend";
+
+builder.Services.AddCors(options => options.AddPolicy(frontendCorsPolicy, policy =>
+    policy.WithOrigins("http://localhost:5174")
+        .AllowAnyMethod()
+        .AllowAnyHeader()));
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -50,6 +56,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseRouting();
+app.UseCors(frontendCorsPolicy);
 app.MapControllers();
 
 app.Run();
