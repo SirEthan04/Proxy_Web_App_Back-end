@@ -37,6 +37,17 @@ public class Product
         Version = version;
         return lot;
     }
+    public void ReceiveStock(Guid lotId, int quantity)
+    {
+        if (quantity <= 0) throw new ArgumentOutOfRangeException(nameof(quantity));
+        var lot = _lots.SingleOrDefault(l => l.Id == lotId)
+            ?? throw new ArgumentException("El lote no pertenece al producto.", nameof(lotId));
+        var stock = new StockLevel(checked(Stock.Value + quantity));
+        var version = checked(Version + 1);
+        lot.Receive(quantity);
+        Stock = stock;
+        Version = version;
+    }
     public void RemoveStock(Guid lotId, int quantity)
     {
         var lot = _lots.SingleOrDefault(l => l.Id == lotId)

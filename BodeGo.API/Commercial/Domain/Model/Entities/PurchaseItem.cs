@@ -11,6 +11,13 @@ public class PurchaseItem
     public Money UnitCost { get; private set; } = null!;
     public Money Subtotal { get; private set; } = null!;
     private PurchaseItem() { }
+    internal void AssignReceivedLot(Guid lotId)
+    {
+        Validation.Id(lotId, nameof(lotId));
+        if (LotId.HasValue && LotId != lotId)
+            throw new InvalidOperationException("No se puede reemplazar el lote del detalle.");
+        LotId = lotId;
+    }
     internal PurchaseItem(Guid parentId, Guid productId, Guid? lotId, Quantity quantity, Money price)
     {
         Id = Guid.NewGuid();
