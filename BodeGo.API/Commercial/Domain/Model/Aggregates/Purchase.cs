@@ -29,6 +29,13 @@ public class Purchase
         _items.Add(item);
         Total = total;
     }
+    public void AssignReceivedLot(Guid itemId, Guid lotId)
+    {
+        RequireDraft();
+        var item = _items.SingleOrDefault(i => i.Id == itemId)
+            ?? throw new ArgumentException("El detalle no pertenece a la compra.", nameof(itemId));
+        item.AssignReceivedLot(lotId);
+    }
     public void Confirm()
     {
         RequireDraft();

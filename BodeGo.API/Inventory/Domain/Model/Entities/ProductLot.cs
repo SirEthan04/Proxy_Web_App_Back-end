@@ -24,4 +24,9 @@ public class ProductLot
         if (quantity <= 0 || quantity > QuantityAvailable) throw new ArgumentOutOfRangeException(nameof(quantity));
         QuantityAvailable -= quantity;
     }
+    internal void Receive(int quantity)
+    {
+        if (quantity <= 0) throw new ArgumentOutOfRangeException(nameof(quantity));
+        QuantityAvailable = checked(QuantityAvailable + quantity);
+    }
 }
