@@ -8,6 +8,8 @@ public static class ReportingServiceCollectionExtensions
     {
         services.AddScoped<ISalesSummaryRepository, SalesSummaryRepository>();
         services.AddScoped<ISalesSummaryQueryService, SalesSummaryQueryService>();
+        services.AddScoped<ITopProductsRepository, TopProductsRepository>();
+        services.AddScoped<ITopProductsQueryService, TopProductsQueryService>();
         return services;
     }
 }
