@@ -12,6 +12,8 @@ public static class OperationsServiceCollectionExtensions
         services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(BodeGo.API.Operations.Interfaces.REST.OperationsValidationResponse.Configure);
         services.AddScoped<IWasteCommandService, BodeGo.API.Operations.Application.Internal.CommandServices.WasteCommandService>();
         services.AddScoped<IOperationsSession, OperationsSession>();
+        services.AddScoped<IInventoryCountCommandService, BodeGo.API.Operations.Application.Internal.CommandServices.InventoryCountCommandService>();
+        services.AddScoped<IInventoryCountQueryService, BodeGo.API.Operations.Application.Internal.QueryServices.InventoryCountQueryService>();
         services.AddScoped<IWasteQueryService, BodeGo.API.Operations.Application.Internal.QueryServices.WasteQueryService>();
         return services;
     }
