@@ -7,6 +7,7 @@ public static class OperationsServiceCollectionExtensions
 {
     public static IServiceCollection AddOperations(this IServiceCollection services)
     {
+        services.AddScoped<BodeGo.API.Operations.Application.Services.IInventoryMovementQueryService, BodeGo.API.Operations.Application.Internal.QueryServices.InventoryMovementQueryService>();
         services.AddScoped<IOperationsRepository, OperationsRepository>();
         services.AddScoped<IOperationsSession, OperationsSession>();
         return services;
