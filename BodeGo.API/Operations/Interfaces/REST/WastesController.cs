@@ -7,8 +7,14 @@ namespace BodeGo.API.Operations.Interfaces.REST;
 [ApiController]
 [Tags("Operations")]
 [Route("api/v1/wastes")]
-public class WastesController(IWasteCommandService commands) : ControllerBase
+public class WastesController(IWasteCommandService commands, IWasteQueryService queries) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType<IEnumerable<WasteResource>>(200)]
+    public async Task<IActionResult> GetAll(CancellationToken ct) =>
+        Ok((await queries.Handle(new BodeGo.API.Operations.Domain.Model.Queries.GetWastesQuery(), ct))
+            .Select(WasteResourceAssembler.From));
+
     [HttpPost]
     [ProducesResponseType<WasteResource>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
