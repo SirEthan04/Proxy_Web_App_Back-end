@@ -9,7 +9,7 @@ public static class ReportParameterParser
             throw new ArgumentException("Las fechas deben tener el formato yyyy-MM-dd.");
         return date;
     }
-    public static int Limit(string value)
+    public static int Limit(string? value)
     {
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var limit))
             throw new ArgumentException("El límite debe ser un número entero entre 1 y 100.");

@@ -27,12 +27,13 @@ public class ReportsController(ISalesSummaryQueryService summaries, ITopProducts
     [ProducesResponseType<IEnumerable<TopProductResource>>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     public async Task<IActionResult> TopProducts([FromQuery] string? from, [FromQuery] string? to,
-        CancellationToken cancellationToken, [FromQuery] string limit = "10")
+        CancellationToken cancellationToken, [FromQuery] string? limit = null)
     {
         try
         {
+            var limitValue = limit ?? (Request.Query.ContainsKey("limit") ? "" : "10");
             var result = await products.Handle(new GetTopProductsQuery(ReportParameterParser.Date(from),
-                ReportParameterParser.Date(to), ReportParameterParser.Limit(limit)), cancellationToken);
+                ReportParameterParser.Date(to), ReportParameterParser.Limit(limitValue)), cancellationToken);
             return Ok(result.Select(TopProductResourceAssembler.From));
         }
         catch (ArgumentException exception) { return Problem(statusCode: 400, title: exception.Message); }
