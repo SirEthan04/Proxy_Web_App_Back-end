@@ -3,9 +3,11 @@ using BodeGo.API.Commercial.Domain.Model.Aggregates;
 using BodeGo.API.Inventory.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Entities;
 
-internal sealed class MemoryConfirmationSession : ICommercialConfirmationSession
+internal sealed class MemoryConfirmationSession : ICommercialConfirmationSession, BodeGo.API.IAM.Application.Services.ICurrentUser
 {
     public Guid UserId { get; } = Guid.NewGuid();
+    public BodeGo.API.IAM.Application.Model.Results.AuthenticatedUser User =>
+        new(UserId, "Prueba", "commercial@example.test", 2, "Empleado");
     public Dictionary<Guid, Product> Products { get; } = [];
     public Dictionary<Guid, Purchase> Purchases { get; } = [];
     public Dictionary<Guid, Sale> Sales { get; } = [];

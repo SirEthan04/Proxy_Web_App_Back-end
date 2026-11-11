@@ -60,13 +60,20 @@ if (args.Length == 0) return;
 
 try
 {
-    using var db = new BodeGoDbContextFactory().CreateDbContext([]);
+    var integration = args[0] == "--integration";
+    var isolatedConnection = Environment.GetEnvironmentVariable("BODEGO_TEST_MYSQL_CONNECTION");
+    if (integration && string.IsNullOrWhiteSpace(isolatedConnection))
+        throw new InvalidOperationException("Configure BODEGO_TEST_MYSQL_CONNECTION para una base aislada.");
+    using var db = integration
+        ? new BodeGoDbContext(new DbContextOptionsBuilder<BodeGoDbContext>().UseMySQL(isolatedConnection!).Options)
+        : new BodeGoDbContextFactory().CreateDbContext([]);
     var connection = new MySqlConnectionStringBuilder(db.Database.GetConnectionString());
     Check(connection.Server is "localhost" or "127.0.0.1" && connection.Port == 3306 &&
-        connection.Database == "bodego_db", "Only the local development database is allowed.");
+        (integration ? connection.Database.StartsWith("bodego_test_", StringComparison.Ordinal) : connection.Database == "bodego_db"),
+        "Integration requires an isolated bodego_test_* database.");
     Check(!(await db.Database.GetPendingMigrationsAsync()).Any(), "Apply the existing migration before integration checks.");
     Check(await db.Database.CanConnectAsync(), "MySQL connection unavailable.");
-    Console.WriteLine("Local bodego_db connection verified; migration is applied.");
+    Console.WriteLine("Local connection verified; migration is applied.");
     if (args[0] == "--preflight") return;
     if (args.Length != 2 || args[0] != "--integration") throw new InvalidOperationException("Use --integration <local API URL>.");
     var uri = new Uri(args[1]);
@@ -78,6 +85,9 @@ try
     await provider.InitializeIamRolesAsync();
     Check(await db.Roles.CountAsync(r => r.Id == 1 || r.Id == 2) == 2, "Role initialization failed.");
     using var http = new HttpClient { BaseAddress = uri };
+    var token = Environment.GetEnvironmentVariable("BODEGO_TEST_ACCESS_TOKEN")
+        ?? throw new InvalidOperationException("Configure un JWT Administrador de la API aislada.");
+    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
     const string email = "iam.verificacion@bodego.example";
     async Task<JsonElement> GetJson(string path)
     {
@@ -213,6 +223,8 @@ catch (Exception exception)
 
 sealed class MemoryRepositories : IUserRepository, IRoleRepository
 {
+    public Task<User?> FindByEmailAsync(EmailAddress email, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Users.SingleOrDefault(u => u.Email == email));
     public List<User> Users { get; } = [];
     private readonly Role[] _roles = [new(1, "Administrador"), new(2, "Empleado")];
     public Task<User?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Users.SingleOrDefault(u => u.Id == id));

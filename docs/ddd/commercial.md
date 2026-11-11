@@ -4,6 +4,11 @@ Las rutas aparecen en Scalar (entorno Development) bajo la etiqueta **Commercial
 Hay ocho endpoints: seis crean/consultan operaciones y dos las confirman.
 Crear borradores no modifica productos, lotes ni `inventory_movements`.
 
+Los cuatro POST requieren JWT de un usuario activo. Empleado confirma sus propios
+documentos; Administrador puede confirmar documentos ajenos. El creador se conserva
+y el movimiento registra al confirmador real. Ver [autenticación IAM](autenticacion-iam.md)
+para login, inicialización administrativa y configuración segura.
+
 ## Endpoints
 
 - `POST /api/v1/purchases`: registra una compra Draft y sus detalles.
@@ -21,7 +26,6 @@ Compra (mismo contrato para venta):
 
 ```json
 {
-  "userId": "GUID-DE-USUARIO-EXISTENTE",
   "items": [
     {
       "productId": "GUID-DE-PRODUCTO-EXISTENTE",
@@ -33,9 +37,9 @@ Compra (mismo contrato para venta):
 }
 ```
 
-Para `POST /api/v1/sales`, el importe representa precio unitario. Para compras representa costo unitario. `userId`, `productId`, `quantity`, `unitAmount` y al menos un detalle son obligatorios; `lotId` es opcional y cuando se especifica debe existir y pertenecer al producto. Cantidad debe ser mayor que cero; importe admite hasta dos decimales y no puede ser negativo. Éxito: 201 con recurso y GUID; validación/referencia inválida: 400; consulta inexistente: 404.
+Para `POST /api/v1/sales`, el importe representa precio unitario. Para compras representa costo unitario. `productId`, `quantity`, `unitAmount` y al menos un detalle son obligatorios; `lotId` es opcional y cuando se especifica debe existir y pertenecer al producto. El usuario se obtiene del JWT: enviar `userId` en el body se rechaza con 400. Cantidad debe ser mayor que cero; importe admite hasta dos decimales y no puede ser negativo. Éxito: 201 con recurso y GUID; validación/referencia inválida: 400; consulta inexistente: 404.
 
-Prueba en Scalar: iniciar la API en Development, abrir `/scalar/v1`, seleccionar POST y pegar el JSON con GUID reales obtenidos de usuarios/productos existentes. Copiar el ID de la respuesta para probar GET por ID y revisar las listas.
+Prueba en Scalar: iniciar la API en Development, abrir `/scalar`, hacer login y configurar Bearer. Seleccionar POST y pegar el JSON con GUID reales de productos. Copiar el ID de la respuesta para probar GET por ID y revisar las listas. Usar una base aislada para pruebas que escriban datos.
 
 ## Verificación en MySQL Workbench
 
@@ -144,7 +148,7 @@ http://localhost:5281/scalar. No utilizar una instancia antigua que todavía exp
 Los siguientes GUID son ejemplos de contrato: sustituir por IDs REALES obtenidos
 en los GET y copiar los IDs devueltos en cada POST.
 
-1. Obtener un usuario activo y una categoría existente. Crear un producto con
+1. Iniciar sesión con un usuario activo y configurar Bearer; obtener una categoría existente. Crear un producto con
    POST /api/v1/products (el servidor inicia stock en cero):
 
 ```json
@@ -156,11 +160,10 @@ en los GET y copiar los IDs devueltos en cada POST.
 }
 ```
 
-2. POST /api/v1/purchases, usando el usuario y el producto creados:
+2. POST /api/v1/purchases, usando el token del creador y el producto:
 
 ```json
 {
-  "userId":"33333333-3333-3333-3333-333333333333",
   "items":[
     {"productId":"22222222-2222-2222-2222-222222222222","lotId":null,"quantity":20,"unitAmount":1.20}
   ]
@@ -192,7 +195,6 @@ no una fecha nueva de confirmación: el esquema no tiene ConfirmedAt.
 
 ```json
 {
-  "userId":"33333333-3333-3333-3333-333333333333",
   "items":[
     {"productId":"22222222-2222-2222-2222-222222222222","lotId":"66666666-6666-6666-6666-666666666666","quantity":3,"unitAmount":2.50}
   ]
@@ -277,11 +279,23 @@ continuar con nuevas operaciones válidas, conservando historia.
 
 ## Pruebas automatizadas y resultado observado
 
+La integración actual debe ejecutarse en una base aislada con un JWT válido.
+El comando de autenticación prepara ambos y ejecuta también la suite comercial:
+
+```powershell
+dotnet run --project tests/BodeGo.AuthenticationChecks -- --mysql
+```
+
+Esto crea una base nueva `bodego_test_autenticacion_*`; nunca utiliza `bodego_db`
+para escrituras. Para revisar bases anteriores sin escribir, usar `--inspect-mysql`.
+
 ```powershell
 dotnet restore
 dotnet build
 dotnet run --project tests/BodeGo.CommercialChecks
-# Con API nueva ejecutándose, usuario activo y MySQL local:
+# Sólo con una API apuntando a una base aislada bodego_test_*:
+# Configurar BODEGO_TEST_MYSQL_CONNECTION y BODEGO_TEST_ACCESS_TOKEN localmente,
+# sin publicar sus valores. El token debe pertenecer a esa misma API/base.
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 dotnet run --project tests/BodeGo.CommercialChecks -- --integration http://localhost:5281
 ```
@@ -290,8 +304,9 @@ Las unitarias usan una sesión doble explícita y NO prueban transacciones reale
 Cubren 20 casos: flujo 0/20/17, reposición de un lote, detalles repetidos, reserva
 explícita antes de FIFO, estados no Draft, lote ajeno, exceso y overflow sin mutación.
 
-La integración rechaza destinos que no sean API local y bodego_db en localhost o
-127.0.0.1:3306, exige la migración aplicada, siete tablas InnoDB y un usuario activo.
+La integración rechaza destinos que no sean API local y una base `bodego_test_*`
+en localhost o 127.0.0.1; exige la migración aplicada, siete tablas InnoDB y una
+identidad JWT activa que pertenezca a esa base.
 Crea dos productos y una categoría por ejecución, identificados con un sufijo único;
 usa los POST existentes para crear borradores y las confirmaciones reales para cambiar
 stock. No modifica productos previos ni borra filas. Cada ejecución crea fixtures
@@ -313,7 +328,7 @@ ventas distintas que compiten por todo el stock: resultados 200/409 y stock nunc
 La suite completa continúa después del checkpoint 17: el primer producto termina
 con 19 por las pruebas multidetalle y el segundo con 0 por la carrera de ventas.
 No confundir esos resultados finales con el checkpoint intermedio 0→20→17 aprobado.
-La ejecución realizada usó el sufijo `e8403fc017524a8d9e0bc25573b7bfa0` y dejó:
+La ejecución histórica anterior a JWT usó el sufijo `e8403fc017524a8d9e0bc25573b7bfa0` y dejó:
 - Producto flujo: `8782cc2f-cb0d-48dc-8dd8-1c9a732b0750`.
 - Producto multidetalle/concurrencia: `5643747b-49fc-410a-a1da-9dc41d7ee804`.
 
@@ -321,8 +336,10 @@ También pasaron las suites existentes: 76 generales, 12 IAM, 63 Inventory, 48 O
 y 29 Monitoring/Reporting en modo sin MySQL. La integración de Reporting aprobó
 68 verificaciones sobre datos reales con cuatro ventas Confirmed, más cuatro
 verificaciones con fixtures SQL virtuales; no escribió información.
-OpenAPI contiene exactamente **30 operaciones**, ocho Commercial, con ambas rutas
-nuevas y sin eliminar las 28 anteriores. EF no detectó diferencias de esquema.
+Actualmente OpenAPI contiene **32 operaciones**: las 30 originales (ocho Commercial)
+y login/me. La reanudación con JWT aprobó 131 comprobaciones comerciales reales
+en `bodego_test_autenticacion_20261111200206_ea819d69`. Ver el informe completo
+en [autenticación IAM](autenticacion-iam.md). No se creó una migración nueva.
 
 La compilación habitual encontró un ejecutable anterior bloqueado; la regresión se
 compiló en una salida aislada con 0 advertencias y 0 errores. La comprobación EF se
@@ -332,8 +349,9 @@ actual antes de probar Scalar. No se publicó esta rama ni se abrió un PR autom
 Pendiente: pruebas de carga sostenida, fallo real de red en commit, provocar deadlocks
 reales y carreras con escritores de Operations. Los códigos de conflicto están
 contemplados, pero no se afirma haber reproducido todas esas condiciones. Tampoco se
-implementan autenticación/autorización, reglas nuevas de vencimiento ni generación
-de alertas. Revisar estos límites antes de producción.
+implementan reglas nuevas de vencimiento ni generación de alertas. La autenticación
+y autorización de los POST comerciales sí están implementadas; los GET conservan
+sus permisos anteriores. Revisar estos límites antes de producción.
 
 Referencias de implementación: [bloqueos MySQL](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html)
 y [transacciones EF Core](https://learn.microsoft.com/en-us/ef/core/saving/transactions).

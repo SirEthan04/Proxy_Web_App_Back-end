@@ -9,6 +9,8 @@ namespace BodeGo.API.IAM.Infrastructure.Persistence.EFC.Repositories;
 
 public class UserRepository(BodeGoDbContext context) : IUserRepository
 {
+    public Task<User?> FindByEmailAsync(EmailAddress email, CancellationToken cancellationToken = default) =>
+        context.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
     public Task<User?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
 

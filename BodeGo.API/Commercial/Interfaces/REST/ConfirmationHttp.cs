@@ -4,6 +4,7 @@ internal static class ConfirmationHttp
 {
     public static int StatusCode(CommercialConfirmationException exception) => exception.Failure switch
     {
+        ConfirmationFailure.Forbidden => 403,
         ConfirmationFailure.NotFound => 404,
         ConfirmationFailure.Conflict => 409,
         ConfirmationFailure.Unavailable => 503,

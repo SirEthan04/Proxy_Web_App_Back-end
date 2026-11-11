@@ -24,16 +24,18 @@ internal static class CommercialIntegrationChecks
         try
         {
             Check(new Uri(baseUrl).IsLoopback, "Solo se permite una API local.");
-            using var configured = new BodeGoDbContextFactory().CreateDbContext([]);
+            var isolatedConnection = Environment.GetEnvironmentVariable("BODEGO_TEST_MYSQL_CONNECTION")
+                ?? throw new InvalidOperationException("Configure una base aislada mediante BODEGO_TEST_MYSQL_CONNECTION.");
+            var token = Environment.GetEnvironmentVariable("BODEGO_TEST_ACCESS_TOKEN")
+                ?? throw new InvalidOperationException("Configure un JWT válido de la API aislada.");
+            using var configured = new BodeGoDbContext(new DbContextOptionsBuilder<BodeGoDbContext>().UseMySQL(isolatedConnection).Options);
             var connection = new MySqlConnectionStringBuilder(configured.Database.GetConnectionString());
-            Check(connection.Server is "localhost" or "127.0.0.1" && connection.Port == 3306 && connection.Database == "bodego_db",
-                "Solo se permite bodego_db local.");
+            Check(connection.Server is "localhost" or "127.0.0.1" && connection.Database.StartsWith("bodego_test_", StringComparison.Ordinal),
+                "Solo se permite una base local aislada bodego_test_*.");
             Check(await configured.Database.CanConnectAsync(), "MySQL no está disponible.");
             Check(!(await configured.Database.GetPendingMigrationsAsync()).Any(), "Aplicar primero la migración común.");
             var engineCount = await configured.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('products','product_lots','purchases','purchase_items','sales','sale_items','inventory_movements') AND engine = 'InnoDB'").SingleAsync();
             Check(engineCount == 7, "Las tablas transaccionales requieren InnoDB.");
-            var userId = await configured.Users.Where(u => u.Active).Select(u => u.Id).FirstOrDefaultAsync();
-            Check(userId != Guid.Empty, "Se requiere un usuario activo existente para las pruebas.");
             BodeGoDbContext NewDb(bool fail = false)
             {
                 var options = new DbContextOptionsBuilder<BodeGoDbContext>().UseMySQL(connection.ConnectionString);
@@ -41,6 +43,11 @@ internal static class CommercialIntegrationChecks
                 return new BodeGoDbContext(options.Options);
             }
             using var http = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(45) };
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var identity = await http.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+            var userId = identity.GetProperty("id").GetGuid();
+            Check(await configured.Users.AnyAsync(u => u.Id == userId && u.Active), "La identidad no pertenece a la base aislada.");
+            var actor = new CheckCurrentUser(userId);
             async Task<JsonElement> Request(HttpMethod method, string path, object? body, int expected)
             {
                 using var message = new HttpRequestMessage(method, path);
@@ -64,7 +71,7 @@ internal static class CommercialIntegrationChecks
             object Item(Guid productId, int quantity, Guid? lotId = null) => new { productId, lotId, quantity, unitAmount = 2.5m };
             async Task<Guid> Draft(string kind, params object[] items)
             {
-                var resource = await Request(HttpMethod.Post, "/api/v1/" + kind, new { userId, items }, 201);
+                var resource = await Request(HttpMethod.Post, "/api/v1/" + kind, new { items }, 201);
                 Check(resource.GetProperty("status").GetString() == "Draft", "La creación ya no genera Draft.");
                 return resource.GetProperty("id").GetGuid();
             }
@@ -122,7 +129,7 @@ internal static class CommercialIntegrationChecks
             await Confirm("sales", multiSale);
             Check((await Snapshot(first)).Stock == 19 && (await Snapshot(second)).Stock == 5, "Venta multidetalle no descontó productos.");
             await Movement(multiSale, -5, "Sale");
-            await Request(HttpMethod.Post, "/api/v1/sales", new { userId, items = new[] { Item(second, 1, lotId) } }, 400);
+            await Request(HttpMethod.Post, "/api/v1/sales", new { items = new[] { Item(second, 1, lotId) } }, 400);
 
             async Task Rollback(bool isPurchase)
             {
@@ -134,8 +141,8 @@ internal static class CommercialIntegrationChecks
                     var session = new CommercialConfirmationSession(failing);
                     try
                     {
-                        if (isPurchase) await new PurchaseConfirmationService(session).Handle(new ConfirmPurchaseCommand(id));
-                        else await new SaleConfirmationService(session).Handle(new ConfirmSaleCommand(id));
+                        if (isPurchase) await new PurchaseConfirmationService(session, actor).Handle(new ConfirmPurchaseCommand(id));
+                        else await new SaleConfirmationService(session, actor).Handle(new ConfirmSaleCommand(id));
                         throw new InvalidOperationException("No se produjo el fallo inyectado.");
                     }
                     catch (InjectedConfirmationFailure) { checks++; }
@@ -163,8 +170,8 @@ internal static class CommercialIntegrationChecks
                 {
                     try
                     {
-                        if (isPurchase) await new PurchaseConfirmationService(session).Handle(new ConfirmPurchaseCommand(id));
-                        else await new SaleConfirmationService(session).Handle(new ConfirmSaleCommand(id));
+                        if (isPurchase) await new PurchaseConfirmationService(session, actor).Handle(new ConfirmPurchaseCommand(id));
+                        else await new SaleConfirmationService(session, actor).Handle(new ConfirmSaleCommand(id));
                         return true;
                     }
                     catch (CommercialConfirmationException e) when (e.Failure == ConfirmationFailure.Conflict) { return false; }
@@ -202,7 +209,7 @@ internal static class CommercialIntegrationChecks
             Check(await Snapshot(first) == rollbackBefore, "Venta multidetalle insuficiente confirmó parcialmente.");
             var api = (await Get("/openapi/v1.json")).GetProperty("paths");
             var operations = api.EnumerateObject().Sum(path => path.Value.EnumerateObject().Count(op => op.Name is "get" or "post" or "put" or "delete" or "patch"));
-            Check(operations == 30, "OpenAPI no contiene exactamente 30 endpoints.");
+            Check(operations == 32, "OpenAPI no contiene exactamente 32 endpoints.");
             foreach (var kind in new[] { "purchases", "sales" })
             {
                 var operation = api.GetProperty($"/api/v1/{kind}/{{id}}/confirm").GetProperty("post");
