@@ -7,9 +7,12 @@ using BodeGo.API.Commercial.Domain.Model.Aggregates;
 using BodeGo.API.Commercial.Domain.Repositories;
 using BodeGo.API.Inventory.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Entities;
+using BodeGo.API.Operations.Application.Services;
+using BodeGo.API.Operations.Domain.Repositories;
+using BodeGo.API.Operations.Domain.Model.Aggregates;
 
 internal sealed class TestRepositories : IUserRepository, IRoleRepository,
-    IPurchaseRepository, ISaleRepository, ICommercialConfirmationSession
+    IPurchaseRepository, ISaleRepository, ICommercialConfirmationSession, IOperationsSession, IOperationsRepository
 {
     public List<User> Users { get; } = [];
     public List<Role> Roles { get; } = [new(1, "Administrador"), new(2, "Empleado")];
@@ -17,6 +20,14 @@ internal sealed class TestRepositories : IUserRepository, IRoleRepository,
     public List<Sale> Sales { get; } = [];
     public List<Product> Products { get; } = [];
     public List<InventoryMovement> Movements { get; } = [];
+    public List<Waste> Wastes { get; } = [];
+    public List<InventoryCount> Counts { get; } = [];
+    public Task<Product?> LoadProductAsync(Guid id, CancellationToken ct) => Task.FromResult(Products.SingleOrDefault(p => p.Id == id));
+    public void Add(Waste waste, IReadOnlyList<InventoryMovement> movements) { Wastes.Add(waste); Movements.AddRange(movements); }
+    public void Add(InventoryCount count) => Counts.Add(count);
+    public Task<IReadOnlyList<Waste>> ListWastesAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Waste>>(Wastes.ToArray());
+    public Task<IReadOnlyList<InventoryMovement>> ListMovementsAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<InventoryMovement>>(Movements.ToArray());
+    public Task<InventoryCount?> FindCountAsync(Guid id, CancellationToken ct) => Task.FromResult(Counts.SingleOrDefault(c => c.Id == id));
     public Task<User?> FindByEmailAsync(EmailAddress email, CancellationToken ct = default) => Task.FromResult(Users.SingleOrDefault(u => u.Email == email));
     public Task<User?> FindByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult(Users.SingleOrDefault(u => u.Id == id));
     public Task<bool> ExistsByEmailAsync(EmailAddress email, CancellationToken ct = default) => Task.FromResult(Users.Any(u => u.Email == email));

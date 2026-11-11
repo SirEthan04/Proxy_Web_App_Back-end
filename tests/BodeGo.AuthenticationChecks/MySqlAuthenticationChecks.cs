@@ -224,12 +224,14 @@ internal static class MySqlAuthenticationChecks
                     await db.SaveChangesAsync();
                 }
                 // Se modifica el rol sólo del usuario ficticio recién creado en la base aislada.
+                string? deactivatedToken = null;
                 var temporaryToken = app.Services.CreateScope();
                 using (temporaryToken)
                 {
                     var issuer = temporaryToken.ServiceProvider.GetRequiredService<BodeGo.API.IAM.Application.Services.IAccessTokenService>();
                     var newId = registered.GetProperty("id").GetGuid();
                     var newToken = issuer.Issue(new(newId, "Alta JWT", "new@example.test", 2, "Empleado")).AccessToken;
+                    deactivatedToken = newToken;
                     await Request(HttpMethod.Get, "/api/v1/users", 200, token: newToken);
                     await using var db = new BodeGoDbContext(Options());
                     var user = await db.Users.SingleAsync(u => u.Id == newId);
@@ -267,19 +269,63 @@ internal static class MySqlAuthenticationChecks
                 }
                 var summary = await Request(HttpMethod.Get, "/api/v1/reports/sales-summary", 200);
                 Check(summary.GetProperty("salesCount").GetInt64() == 1 && summary.GetProperty("totalAmount").GetDecimal() == 9, "Reporting no refleja la venta confirmada.");
+                var wasteBody = new { productId = product.Id, lotId = (Guid?)null, quantity = 2, reason = "Merma JWT aislada" };
+                var countBody = new { notes = "Conteo JWT aislado", items = new[] {
+                    new { productId = product.Id, lotId = (Guid?)null, countedQuantity = 14 } } };
+                await Request(HttpMethod.Post, "/api/v1/wastes", 401, wasteBody);
+                await Request(HttpMethod.Post, "/api/v1/inventory-counts", 401, countBody);
+                foreach (var rejectedToken in new[] { deactivatedToken!, string.Join('.', altered),
+                    InvalidToken(jwtSettings.Issuer, jwtSettings.Audience, expired: true) })
+                {
+                    await Request(HttpMethod.Post, "/api/v1/wastes", 401, wasteBody, rejectedToken);
+                    await Request(HttpMethod.Post, "/api/v1/inventory-counts", 401, countBody, rejectedToken);
+                }
+                await Request(HttpMethod.Post, "/api/v1/wastes", 400,
+                    new { productId = product.Id, quantity = 2, reason = "Suplantación", userId = admin.Id }, token);
+                await Request(HttpMethod.Post, "/api/v1/inventory-counts", 400,
+                    new { userId = admin.Id, countBody.notes, countBody.items }, token);
+                await Request(HttpMethod.Post, "/api/v1/wastes", 400,
+                    new { productId = product.Id, quantity = 0, reason = "Cantidad inválida" }, token);
+                var waste = await Request(HttpMethod.Post, "/api/v1/wastes", 201, wasteBody, token);
+                Check(waste.GetProperty("userId").GetGuid() == employee.Id, "La merma no conserva al actor.");
+                await Request(HttpMethod.Post, "/api/v1/wastes", 409,
+                    new { productId = product.Id, quantity = 100, reason = "Sin stock" }, token);
+                var count = await Request(HttpMethod.Post, "/api/v1/inventory-counts", 201, countBody, adminToken);
+                Check(count.GetProperty("userId").GetGuid() == admin.Id
+                    && count.GetProperty("items")[0].GetProperty("expectedQuantity").GetInt32() == 15
+                    && count.GetProperty("items")[0].GetProperty("difference").GetInt32() == -1,
+                    "Conteo sin identidad o diferencia incorrecta.");
+                await using (var db = new BodeGoDbContext(Options()))
+                {
+                    Check((await db.Products.SingleAsync(p => p.Id == product.Id)).Stock.Value == 15
+                        && (await db.ProductLots.SingleAsync(l => l.ProductId == product.Id)).QuantityAvailable == 15,
+                        "La merma no descontó coherentemente o el conteo modificó stock.");
+                    var movement = await db.InventoryMovements.SingleAsync(m => m.SourceId == waste.GetProperty("id").GetGuid().ToString());
+                    Check(movement.UserId == employee.Id && movement.QuantityDelta == -2
+                        && await db.InventoryMovements.CountAsync(m => m.ProductId == product.Id) == 3,
+                        "La merma o el conteo registraron movimientos incorrectos.");
+                }
+                var summaryAfterWaste = await Request(HttpMethod.Get, "/api/v1/reports/sales-summary", 200);
+                Check(summaryAfterWaste.GetProperty("salesCount").GetInt64() == 1
+                    && summaryAfterWaste.GetProperty("totalAmount").GetDecimal() == 9, "Operations alteró Reporting de ventas.");
                 var previousConnection = Environment.GetEnvironmentVariable("BODEGO_TEST_MYSQL_CONNECTION");
                 var previousToken = Environment.GetEnvironmentVariable("BODEGO_TEST_ACCESS_TOKEN");
+                var previousOperationsConnection = Environment.GetEnvironmentVariable("BODEGO_OPERATIONS_TEST_CONNECTION");
                 try
                 {
                     Environment.SetEnvironmentVariable("BODEGO_TEST_MYSQL_CONNECTION", isolated);
                     Environment.SetEnvironmentVariable("BODEGO_TEST_ACCESS_TOKEN", adminToken);
                     await CommercialIntegrationChecks.Run(url);
                     Check(Environment.ExitCode == 0, "Falló la suite de transacciones comerciales aisladas.");
+                    Environment.SetEnvironmentVariable("BODEGO_OPERATIONS_TEST_CONNECTION", isolated);
+                    await MySqlChecks.Run();
+                    Check(Environment.ExitCode == 0, "Falló la suite transaccional Operations aislada.");
                 }
                 finally
                 {
                     Environment.SetEnvironmentVariable("BODEGO_TEST_MYSQL_CONNECTION", previousConnection);
                     Environment.SetEnvironmentVariable("BODEGO_TEST_ACCESS_TOKEN", previousToken);
+                    Environment.SetEnvironmentVariable("BODEGO_OPERATIONS_TEST_CONNECTION", previousOperationsConnection);
                 }
                 Console.WriteLine($"OK: {checks} comprobaciones HTTP/MySQL de autenticación y autorización en {database}. Sin escrituras en bodego_db.");
             }

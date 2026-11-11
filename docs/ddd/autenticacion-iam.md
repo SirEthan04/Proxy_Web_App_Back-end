@@ -6,9 +6,9 @@ La rama `feature/autenticacion-iam` conserva las 30 rutas originales y agrega
 dos operaciones: `POST /api/v1/auth/login` y `GET /api/v1/auth/me`.
 No cambia GUID, tablas, migraciones, contraseñas existentes ni claves foráneas.
 
-El registro pasa a ser administrativo. Los cuatro POST de Commercial requieren
-identidad real. Las demás rutas conservan sus permisos anteriores: Inventory,
-Operations, Monitoring, Reporting y los GET de Commercial no quedan protegidos
+El registro pasa a ser administrativo. Los cuatro POST de Commercial y los POST
+de mermas/conteos requieren identidad real. Las demás rutas conservan sus permisos anteriores: Inventory,
+los GET de Operations, Monitoring, Reporting y los GET de Commercial no quedan protegidos
 por esta tarea. No asumir que toda la API ya está protegida para producción.
 
 ## Login y respuesta
@@ -146,6 +146,7 @@ la API son reutilizables sin cambiar sus GUID, hashes ni roles.
 | GET `/roles`, `/roles/{id}` | 401 | 403 | Permitido |
 | POST `/purchases`, `/sales` | 401 | Crea con su GUID | Crea con su GUID |
 | POST `/purchases/{id}/confirm`, `/sales/{id}/confirm` | 401 | Sólo documentos propios | Puede confirmar documentos ajenos |
+| POST `/wastes`, `/inventory-counts` | 401 | Registra con su GUID | Registra con su GUID |
 
 Los errores mantienen `ProblemDetails` y textos en español. Un token inexistente,
 inválido o vencido produce 401; un usuario autenticado sin permiso, 403.
@@ -183,6 +184,17 @@ después de cargar la cabecera y antes de modificar inventario. Se conserva
 contra doble confirmación. Se comprueba que el confirmador continúe activo.
 Un Administrador puede confirmar un borrador cuyo creador esté inactivo; no se
 atribuye la acción a ese creador.
+
+## Operations y formularios Vue
+
+`POST /api/v1/wastes` y `POST /api/v1/inventory-counts` usan la política
+`OperationsOperator` para Administrador/Empleado. El controlador obtiene el actor
+de `ICurrentUser`, acreditado desde ClaimsPrincipal, y Application comprueba que
+el Command use ese mismo GUID. Los Resources rechazan userId con 400.
+Los recursos de respuesta conservan userId como dato de trazabilidad.
+Contratos completos y reglas de transacción: [operations.md](operations.md).
+La merma conserva el descuento atómico y sus movimientos; el conteo sólo registra
+la fotografía física, sin ajustar stock.
 
 ## Primer Administrador: procedimiento manual, pendiente
 
@@ -358,6 +370,7 @@ No se modificó el repositorio frontend. La integración deberá:
 4. Usar `/auth/me` para obtener el estado vigente cuando ya dispone del token.
    El contenido de localStorage o un correo coincidente no acreditan identidad.
 5. Retirar `userId` del JSON de compras/ventas. Mantener los GUID de productos/lotes.
+   Retirarlo también de los formularios de mermas y conteos; usar el mismo Bearer.
 6. Habilitar las escrituras comerciales con la identidad real, respetando 401/403.
 7. Ante 401 limpiar estado y volver al login; ante 403 mostrar falta de permiso.
    No reintentar automáticamente POST de confirmación.
@@ -383,3 +396,13 @@ No se modificó el repositorio frontend. La integración deberá:
   Importaciones con hashes no válidos necesitarían recuperación autorizada.
 - Falta integrar Vue y acordar protección futura de los demás módulos. No se afirma
   que toda la aplicación esté lista para producción.
+
+## Ampliación de Operations (11 de noviembre de 2026)
+
+Se recuperó `0a55f7f` sin reimplementar IAM. Las pruebas ampliadas aprobaron:
+129 comprobaciones HTTP/JWT con dobles, 110 HTTP/MySQL de autenticación y operaciones,
+131 de Commercial HTTP/MySQL, y rollback/concurrencia MySQL de Operations.
+Toda escritura utilizó `bodego_test_autenticacion_20261111210853_a4b0cfea`.
+Las bases aisladas anteriores se conservaron. No se ejecutó el inicializador
+administrativo en `bodego_db`, ni se modificaron sus cuentas, datos o migraciones.
+Los POST requieren identidad activa; los demás módulos conservan el alcance descrito.

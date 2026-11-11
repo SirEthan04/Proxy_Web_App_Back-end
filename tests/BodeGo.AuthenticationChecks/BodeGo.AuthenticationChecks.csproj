@@ -10,5 +10,7 @@
     <Compile Include="../BodeGo.CommercialChecks/CommercialIntegrationChecks.cs" Link="CommercialIntegrationChecks.cs" />
     <Compile Include="../BodeGo.CommercialChecks/TransactionTestSupport.cs" Link="TransactionTestSupport.cs" />
     <Compile Include="../BodeGo.CommercialChecks/CheckCurrentUser.cs" Link="CheckCurrentUser.cs" />
+    <Compile Include="../BodeGo.OperationsChecks/MySqlChecks.cs" Link="OperationsMySqlChecks.cs" />
+    <Compile Include="../BodeGo.OperationsChecks/OperationsTestIdentity.cs" Link="OperationsTestIdentity.cs" />
   </ItemGroup>
 </Project>

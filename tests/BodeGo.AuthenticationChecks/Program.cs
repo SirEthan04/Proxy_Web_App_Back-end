@@ -30,6 +30,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using BodeGo.API.Operations.Infrastructure;
+using BodeGo.API.Operations.Application.Services;
+using BodeGo.API.Operations.Domain.Repositories;
 
 if (args is ["--inspect-mysql"])
 {
@@ -74,15 +77,18 @@ builder.Services.AddOpenApi(IamOpenApi.Configure);
 builder.Services.AddIam();
 builder.Services.AddIamAuthentication(builder.Configuration);
 builder.Services.AddCommercial();
+builder.Services.AddOperations();
 foreach (var type in new[] { typeof(IUserRepository), typeof(IRoleRepository), typeof(IPurchaseRepository),
     typeof(ISaleRepository), typeof(ICommercialConfirmationSession), typeof(PurchaseCommandService),
-    typeof(IPurchaseCommandService), typeof(ISaleCommandService) })
+    typeof(IPurchaseCommandService), typeof(ISaleCommandService), typeof(IOperationsRepository), typeof(IOperationsSession) })
     builder.Services.RemoveAll(type);
 builder.Services.AddSingleton<IUserRepository>(store);
 builder.Services.AddSingleton<IRoleRepository>(store);
 builder.Services.AddSingleton<IPurchaseRepository>(store);
 builder.Services.AddSingleton<ISaleRepository>(store);
 builder.Services.AddSingleton<ICommercialConfirmationSession>(store);
+builder.Services.AddSingleton<IOperationsRepository>(store);
+builder.Services.AddSingleton<IOperationsSession>(store);
 builder.Services.AddSingleton(store);
 builder.Services.AddScoped<IPurchaseCommandService, TestCommercialCommands>();
 builder.Services.AddScoped<ISaleCommandService, TestCommercialCommands>();
@@ -204,6 +210,26 @@ try
     await Request(HttpMethod.Post, $"/api/v1/purchases/{foreignPurchase.Id}/confirm", 200, token: adminToken);
     await Request(HttpMethod.Post, $"/api/v1/sales/{foreignSale.Id}/confirm", 200, token: adminToken);
 
+    var wasteBody = new { productId = product.Id, lotId = (Guid?)null, quantity = 1, reason = "Prueba autenticada" };
+    var countBody = new { notes = "Conteo autenticado", items = new[] { new { productId = product.Id, lotId = (Guid?)null, countedQuantity = 15 } } };
+    await Request(HttpMethod.Post, "/api/v1/wastes", 401, wasteBody);
+    await Request(HttpMethod.Post, "/api/v1/inventory-counts", 401, countBody);
+    await Request(HttpMethod.Post, "/api/v1/wastes", 401, wasteBody, otherToken);
+    await Request(HttpMethod.Post, "/api/v1/inventory-counts", 401, countBody, otherToken);
+    await Request(HttpMethod.Post, "/api/v1/wastes", 400,
+        new { productId = product.Id, quantity = 1, reason = "Suplantación", userId = admin.Id }, employeeToken);
+    await Request(HttpMethod.Post, "/api/v1/inventory-counts", 400,
+        new { userId = admin.Id, notes = "Suplantación", countBody.items }, employeeToken);
+    var createdWaste = await Request(HttpMethod.Post, "/api/v1/wastes", 201, wasteBody, employeeToken);
+    Check(createdWaste.GetProperty("userId").GetGuid() == employee.Id
+        && product.Stock.Value == 16 && store.Movements.Last().UserId == employee.Id, "Merma sin identidad o stock incorrecto.");
+    var countSnapshot = (product.Stock.Value, product.Version, store.Movements.Count);
+    var createdCount = await Request(HttpMethod.Post, "/api/v1/inventory-counts", 201, countBody, adminToken);
+    Check(createdCount.GetProperty("userId").GetGuid() == admin.Id
+        && countSnapshot == (product.Stock.Value, product.Version, store.Movements.Count), "Conteo cambió stock o suplantó al actor.");
+    await Request(HttpMethod.Post, "/api/v1/wastes", 409,
+        new { productId = product.Id, quantity = 100, reason = "Exceso" }, employeeToken);
+
     var openapi = await http.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
     var operations = openapi.GetProperty("paths").EnumerateObject()
         .Sum(p => p.Value.EnumerateObject().Count(v => new[] { "get", "post", "put", "patch", "delete" }.Contains(v.Name)));
@@ -232,7 +258,7 @@ try
         && openapi.GetProperty("paths").GetProperty("/api/v1/auth/me").TryGetProperty("get", out _),
         "Faltan las dos rutas de autenticación.");
     Check(openapi.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer").GetProperty("scheme").GetString() == "bearer", "Falta Bearer en OpenAPI.");
-    foreach (var (path, method) in new[] { ("/api/v1/users", "post"), ("/api/v1/users", "get"), ("/api/v1/roles", "get"), ("/api/v1/auth/me", "get"), ("/api/v1/purchases", "post"), ("/api/v1/sales/{id}/confirm", "post") })
+    foreach (var (path, method) in new[] { ("/api/v1/users", "post"), ("/api/v1/users", "get"), ("/api/v1/roles", "get"), ("/api/v1/auth/me", "get"), ("/api/v1/purchases", "post"), ("/api/v1/sales/{id}/confirm", "post"), ("/api/v1/wastes", "post"), ("/api/v1/inventory-counts", "post") })
         Check(openapi.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("security")[0].TryGetProperty("Bearer", out _), "Falta seguridad OpenAPI.");
     using var scalar = await http.GetAsync("/scalar");
     Check(scalar.IsSuccessStatusCode && (await scalar.Content.ReadAsStringAsync()).Contains("BodeGo API"), "Scalar no está disponible.");

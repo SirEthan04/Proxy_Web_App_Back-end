@@ -8,6 +8,7 @@ public static class IamAuthenticationExtensions
 {
     public const string Administrator = "IamAdministrator";
     public const string Commercial = "CommercialOperator";
+    public const string Operations = "OperationsOperator";
     public const string LoginRateLimit = "IamLogin";
 
     public static IServiceCollection AddIamAuthentication(this IServiceCollection services, IConfiguration configuration)
@@ -34,6 +35,7 @@ public static class IamAuthenticationExtensions
         {
             options.AddPolicy(Administrator, p => p.RequireAuthenticatedUser().RequireRole("Administrador"));
             options.AddPolicy(Commercial, p => p.RequireAuthenticatedUser().RequireRole("Administrador", "Empleado"));
+            options.AddPolicy(Operations, p => p.RequireAuthenticatedUser().RequireRole("Administrador", "Empleado"));
         });
         services.AddRateLimiter(options =>
         {
