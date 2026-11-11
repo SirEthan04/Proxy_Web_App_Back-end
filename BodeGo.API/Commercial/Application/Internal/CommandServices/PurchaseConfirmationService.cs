@@ -5,9 +5,10 @@ using BodeGo.API.Commercial.Domain.Model.Commands;
 using BodeGo.API.Inventory.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Entities;
 using BodeGo.API.Operations.Domain.Model.ValueObjects;
+using BodeGo.API.IAM.Application.Services;
 namespace BodeGo.API.Commercial.Application.Internal.CommandServices;
 
-public class PurchaseConfirmationService(ICommercialConfirmationSession session) : IPurchaseConfirmationService
+public class PurchaseConfirmationService(ICommercialConfirmationSession session, ICurrentUser currentUser) : IPurchaseConfirmationService
 {
     public Task<PurchaseResult> Handle(ConfirmPurchaseCommand command, CancellationToken ct = default)
     {
@@ -16,8 +17,9 @@ public class PurchaseConfirmationService(ICommercialConfirmationSession session)
         {
             var purchase = await session.LockPurchaseAsync(command.Id, ct)
                 ?? throw new CommercialConfirmationException("No se encontró la compra solicitada.", ConfirmationFailure.NotFound);
+            CommercialIdentity.Authorize(currentUser.User, purchase.UserId);
             ConfirmationRules.Draft(purchase.Status, purchase.Items.Count);
-            if (!await session.IsActiveUserAsync(purchase.UserId, ct))
+            if (!await session.IsActiveUserAsync(currentUser.User.Id, ct))
                 throw new CommercialConfirmationException("El usuario no existe o está inactivo.");
             var products = new Dictionary<Guid, Product>();
             foreach (var id in purchase.Items.Select(i => i.ProductId).Distinct().OrderBy(id => id))
@@ -45,7 +47,7 @@ public class PurchaseConfirmationService(ICommercialConfirmationSession session)
                     lotId = lot.Id;
                     purchase.AssignReceivedLot(item.Id, lotId);
                 }
-                movements.Add(new InventoryMovement(product.Id, lotId, purchase.UserId,
+                movements.Add(new InventoryMovement(product.Id, lotId, currentUser.User.Id,
                     MovementType.Purchase, item.Quantity.Value, "Purchase", purchase.Id));
             }
             purchase.Confirm();

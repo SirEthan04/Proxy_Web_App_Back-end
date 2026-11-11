@@ -1,10 +1,17 @@
 # Operations: mermas, movimientos y conteos
 
 Implementación sobre las seis tablas existentes; no añade columnas ni migraciones.
-En Development, abrir Scalar en /scalar/v1 y seleccionar la etiqueta **Operations**.
+En Development, abrir Scalar en /scalar y seleccionar la etiqueta **Operations**.
 Configurar MySQL como se indica en [tablas.md](../database/tablas.md).
 Los identificadores de los ejemplos son GUID de ejemplo: sustituirlos por registros reales.
 Las fechas se generan en UTC.
+
+Los dos POST requieren JWT de un Administrador o Empleado activo.
+Hacer login y configurar `Authorization: Bearer <token>` en Scalar/Axios.
+El usuario y su rol se comprueban en MySQL en cada petición; ver
+[autenticación IAM](autenticacion-iam.md).
+El GUID del actor se obtiene de la identidad validada, nunca del formulario.
+Los GET conservan su acceso anterior; no se agregaron rutas ni migraciones.
 
 ## Endpoints implementados
 
@@ -28,13 +35,13 @@ JSON exacto de CreateWasteResource:
 {
   "productId": "11111111-1111-1111-1111-111111111111",
   "lotId": "22222222-2222-2222-2222-222222222222",
-  "userId": "33333333-3333-3333-3333-333333333333",
   "quantity": 2,
   "reason": "Daño"
 }
 ```
 
-ProductId, UserId, Quantity y Reason son obligatorios. LotId puede omitirse o ser null.
+ProductId, Quantity y Reason son obligatorios. LotId puede omitirse o ser null.
+No enviar UserId: el recurso rechaza propiedades desconocidas y devuelve 400.
 Los GUID vacíos se rechazan. La cantidad debe ser un entero positivo; el usuario debe
 existir y estar activo, igual que el producto. El lote indicado debe pertenecer al producto.
 Reason sigue el modelo aprobado: texto no vacío de hasta 255 caracteres después de
@@ -106,7 +113,6 @@ JSON exacto de CreateInventoryCountResource:
 
 ```json
 {
-  "userId": "33333333-3333-3333-3333-333333333333",
   "notes": "Conteo al cierre",
   "items": [
     {
@@ -118,7 +124,8 @@ JSON exacto de CreateInventoryCountResource:
 }
 ```
 
-UserId e Items son obligatorios. Items debe contener al menos un detalle no nulo;
+Items es obligatorio. No enviar UserId: se toma del JWT y enviarlo produce 400.
+Items debe contener al menos un detalle no nulo;
 ProductId y CountedQuantity son obligatorios en cada detalle. LotId y Notes son
 opcionales. Notes, si se envía, admite de 1 a 500 caracteres después de recortar.
 No se aceptan cantidades negativas, productos inexistentes, lotes ajenos, detalles
@@ -158,9 +165,12 @@ el mismo recurso, por ejemplo si el lote tenía 8 unidades:
 
 | Solicitud o condición | HTTP |
 | --- | --- |
+| Token ausente, alterado o vencido; usuario desactivado | 401 |
+| Identidad autenticada sin permiso para la operación | 403 |
+| userId enviado en el cuerpo o propiedad desconocida de la cabecera | 400 |
 | JSON mal formado, tipos incorrectos, GUID inválido o vacío | 400 |
 | Campo obligatorio omitido o detalle nulo | 400 |
-| Producto inexistente/inactivo en merma; usuario inexistente/inactivo | 400 |
+| Producto inexistente/inactivo en merma | 400 |
 | Producto inexistente en conteo o lote inexistente/ajeno | 400 |
 | Merma cero/negativa, motivo vacío/largo, conteo negativo | 400 |
 | Detalles duplicados, sin detalles o total mezclado con lotes | 400 |
@@ -276,9 +286,11 @@ productos/usuarios inexistentes, lote ajeno, cantidades inválidas, motivo, stoc
 insuficiente, descuentos por lote y distribuidos, trazabilidad y conteos sin cambios
 de stock. Comprueba 200/201/400/404/409 y JSON/detalles incompletos.
 
-Resultado local: build correcto, 0 advertencias y 0 errores; base 76, IAM 12,
-Inventory 63 y Operations 48 comprobaciones aprobadas. No se ejecutó persistencia
-MySQL real ni se aplicó una migración durante esta implementación.
+Resultado actualizado: OperationsChecks aprobó 52 comprobaciones con HTTP/JWT
+y dobles explícitos de persistencia/identidad. Conserva los escenarios anteriores
+y agrega 401 sin token y rechazo de userId. AuthenticationChecks aprobó
+129 comprobaciones sin MySQL y 110 comprobaciones HTTP/MySQL reales, incluyendo
+mermas/conteos autenticados. OpenAPI conserva las 32 operaciones.
 
 ### Integración optativa de rollback y concurrencia real
 
@@ -290,14 +302,36 @@ Configurar BODEGO_OPERATIONS_TEST_CONNECTION fuera de Git (no imprimirla).
 dotnet run --project tests/BodeGo.OperationsChecks -- --mysql
 ```
 
-La prueba rechaza nombres de base que no tengan ese prefijo. Inserta datos propios
+La prueba exige una base local con prefijo bodego_operations_test o
+bodego_test_autenticacion_. Inserta datos propios
 identificados como Operations test, sin borrar historia ni crear tablas. Inyecta
 un fallo justo después de SaveChanges, verifica desde otro DbContext que producto,
 lote, merma y movimientos se revirtieron, y luego coordina dos solicitudes que
 leen el mismo stock 10 e intentan descontar 6 cada una. Debe haber un éxito y un
 conflicto, stock y lote finales 4, una merma y delta -6. Finalmente registra/consulta
 un conteo y verifica stock y movimientos intactos. Los datos quedan en la base
-desechable para revisión. Esta variante está compilada pero pendiente de ejecución.
+desechable para revisión. Esta variante se ejecutó correctamente desde la suite
+de autenticación en la misma base aislada que sus pruebas HTTP:
+`bodego_test_autenticacion_20261111210853_a4b0cfea`.
+
+Para crear una base aislada nueva, aplicar sólo la migración existente y ejecutar
+IAM, Commercial y Operations con la misma conexión:
+
+```powershell
+dotnet run --project tests/BodeGo.AuthenticationChecks -- --mysql
+```
+
+La suite prepara y restaura `BODEGO_OPERATIONS_TEST_CONNECTION` sólo en memoria.
+La prueba optativa acepta también el prefijo local `bodego_test_autenticacion_`.
+No escribe en `bodego_db`, no elimina bases anteriores y deja las fixtures para revisar.
+Los servicios directos de rollback/concurrencia usan un actor de prueba explícito;
+las pruebas HTTP de mermas/conteos usan JWT y usuarios reales de esa base aislada.
+
+El flujo HTTP comprobó: compra 20, venta 3, merma 2 → stock/lote 15;
+conteo físico 14 → diferencia -1, sin cambiar stock ni crear movimientos.
+La merma y sus movimientos guardan al Empleado autenticado; el conteo guarda al
+Administrador autenticado. POST con userId, token inválido o usuario desactivado
+se rechazaron sin modificar el inventario.
 
 ## Coordinación pendiente con el equipo
 
@@ -306,14 +340,15 @@ desechable para revisión. Esta variante está compilada pero pendiente de ejecu
 - El puerto IOperationsSession utiliza el agregado público Product y consultas
   de existencia de IAM mediante EF en Infrastructure. No cambia esos contextos.
   Todos los futuros escritores deben respetar Version y la atomicidad de lotes.
-- Commercial ya estaba integrado en el historial recibido. Sus endpoints básicos
-  no deben asumirse como recepción/venta con coordinación de stock completa.
-  Coordinar su futura confirmación atómica antes de atribuirle movimientos.
-- IAM aún debe acordar autenticación/autorización del actor; hoy userId se valida
-  contra un usuario activo, siguiendo el estilo de los endpoints existentes.
+- Commercial confirma compras/ventas de forma atómica y autenticada. No duplicar
+  sus movimientos desde Operations ni modificar las reglas de recepción/FIFO.
+- IAM acredita al actor; Administrador y Empleado registran operaciones propias.
+  Incluso un Administrador no puede elegir otro actor mediante un Command.
+  El primer Administrador habitual necesita inicialización manual autorizada;
+  no se ejecutó como parte de estas pruebas.
 - No hay clave de idempotencia en el esquema/contrato aprobado. Dos POST válidos
   enviados nuevamente son dos operaciones distintas. Tras una respuesta perdida,
   consultar historial antes de reenviar; acordar idempotencia antes de producción.
 - No se implementan conciliaciones ni ajustes automáticos a partir de conteos.
-- Pendiente que otro integrante ejecute HTTP contra MySQL y la prueba optativa
-  para validar restricciones, rollback y concurrencia sobre la versión real del servidor.
+- Pendiente integrar Vue, ensayar carga sostenida y carreras combinadas con otros
+  escritores de inventario. Las pruebas reales por módulo ya pasaron.

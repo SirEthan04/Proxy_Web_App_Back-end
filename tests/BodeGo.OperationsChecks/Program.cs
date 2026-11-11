@@ -24,6 +24,12 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using BodeGo.API.IAM.Application.Services;
+using BodeGo.API.IAM.Infrastructure.Authentication;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 
 var checks = 0;
 void Check(bool condition, string message)
@@ -40,7 +46,8 @@ async Task Reject(Func<Task> action, bool conflict = false)
 var memory = new MemorySession();
 var product = memory.Product;
 var lot = product.Lots.First();
-var commands = new WasteCommandService(memory, memory);
+var identity = new OperationsTestIdentity(memory.UserId);
+var commands = new WasteCommandService(memory, memory, identity);
 CreateWasteCommand Waste(int quantity = 1, Guid? lotId = null) =>
     new(product.Id, lotId, memory.UserId, quantity, "Daño");
 foreach (var quantity in new[] { 0, -1 })
@@ -65,7 +72,7 @@ Check(memory.Movements.Count == 3, "Se espera un movimiento por lote utilizado."
 Check((await new WasteQueryService(memory).Handle(new GetWastesQuery())).Count == 2, "Consulta de mermas.");
 Check((await new InventoryMovementQueryService(memory).Handle(new GetInventoryMovementsQuery())).Count == 3, "Consulta de movimientos.");
 
-var counts = new InventoryCountCommandService(memory, memory);
+var counts = new InventoryCountCommandService(memory, memory, identity);
 CreateInventoryCountCommand Count(params CountItemCommand[] items) => new(memory.UserId, "Control físico", items);
 var item = new CountItemCommand(product.Id, null, 1);
 await Reject(() => counts.Handle(Count()));
@@ -98,9 +105,20 @@ builder.WebHost.UseUrls("http://127.0.0.1:0");
 builder.Services.AddControllers().AddApplicationPart(typeof(WastesController).Assembly);
 builder.Services.AddOpenApi();
 builder.Services.AddOperations();
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+{ ["Jwt:SigningKeyBase64"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) });
+builder.Services.AddIamAuthentication(builder.Configuration);
+builder.Services.RemoveAll<IAuthenticationService>();
+builder.Services.AddSingleton<IAuthenticationService>(identity);
+builder.Services.RemoveAll<IOperationsRepository>();
+builder.Services.RemoveAll<IOperationsSession>();
 builder.Services.AddSingleton<IOperationsRepository>(memory);
 builder.Services.AddSingleton<IOperationsSession>(memory);
 await using var app = builder.Build();
+app.UseRouting();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 app.MapOpenApi();
 await app.StartAsync();
@@ -113,6 +131,10 @@ try
         using (response) Check(response.StatusCode == expected,
             $"{response.RequestMessage?.RequestUri}: esperado {expected}, recibido {response.StatusCode}. {await response.Content.ReadAsStringAsync()}");
     }
+    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new { }), HttpStatusCode.Unauthorized);
+    await Status(await http.PostAsJsonAsync("/api/v1/inventory-counts", new { }), HttpStatusCode.Unauthorized);
+    var token = app.Services.GetRequiredService<IAccessTokenService>().Issue(identity.User).AccessToken;
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     await Status(await http.GetAsync("/api/v1/inventory-movements"), HttpStatusCode.OK);
     await Status(await http.GetAsync("/api/v1/wastes"), HttpStatusCode.OK);
     await Status(await http.GetAsync($"/api/v1/inventory-counts/{count.Id}"), HttpStatusCode.OK);
@@ -120,14 +142,17 @@ try
     await Status(await http.GetAsync("/api/v1/inventory-counts/no-es-guid"), HttpStatusCode.BadRequest);
     await Status(await http.PostAsJsonAsync("/api/v1/wastes", new { }), HttpStatusCode.BadRequest);
     await Status(await http.PostAsync("/api/v1/wastes", new StringContent("{", Encoding.UTF8, "application/json")), HttpStatusCode.BadRequest);
-    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new CreateWasteResource(product.Id, null, memory.UserId, 3, "Pérdida")), HttpStatusCode.Conflict);
-    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new CreateWasteResource(product.Id, null, memory.UserId, 1, "Vencimiento")), HttpStatusCode.Created);
+    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new { productId = product.Id, quantity = 1, reason = "Prueba", userId = Guid.NewGuid() }), HttpStatusCode.BadRequest);
+    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new CreateWasteResource(product.Id, null, 3, "Pérdida")), HttpStatusCode.Conflict);
+    await Status(await http.PostAsJsonAsync("/api/v1/wastes", new CreateWasteResource(product.Id, null, 1, "Vencimiento")), HttpStatusCode.Created);
     await Status(await http.PostAsJsonAsync("/api/v1/inventory-counts",
-        new CreateInventoryCountResource(memory.UserId, null, [new(product.Id, null, 0)])), HttpStatusCode.Created);
+        new CreateInventoryCountResource(null, [new(product.Id, null, 0)])), HttpStatusCode.Created);
     await Status(await http.PostAsJsonAsync("/api/v1/inventory-counts",
-        new { userId = memory.UserId, items = new object?[] { null } }), HttpStatusCode.BadRequest);
+        new { items = new object?[] { null } }), HttpStatusCode.BadRequest);
     await Status(await http.PostAsJsonAsync("/api/v1/inventory-counts",
-        new { userId = memory.UserId, items = new[] { new { productId = product.Id } } }), HttpStatusCode.BadRequest);
+        new { items = new[] { new { productId = product.Id } } }), HttpStatusCode.BadRequest);
+    await Status(await http.PostAsJsonAsync("/api/v1/inventory-counts",
+        new { userId = Guid.NewGuid(), items = new[] { new { productId = product.Id, countedQuantity = 0 } } }), HttpStatusCode.BadRequest);
     var doc = await http.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
     foreach (var (path, method) in new[] {
         ("/api/v1/inventory-movements", "get"), ("/api/v1/wastes", "get"), ("/api/v1/wastes", "post"),

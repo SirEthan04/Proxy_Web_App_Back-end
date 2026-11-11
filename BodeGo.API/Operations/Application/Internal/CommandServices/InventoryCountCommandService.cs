@@ -4,11 +4,13 @@ using BodeGo.API.Operations.Domain.Exceptions;
 using BodeGo.API.Operations.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Commands;
 using BodeGo.API.Operations.Domain.Repositories;
+using BodeGo.API.IAM.Application.Services;
 namespace BodeGo.API.Operations.Application.Internal.CommandServices;
-public class InventoryCountCommandService(IOperationsRepository repository, IOperationsSession session) : IInventoryCountCommandService
+public class InventoryCountCommandService(IOperationsRepository repository, IOperationsSession session, ICurrentUser currentUser) : IInventoryCountCommandService
 {
     public Task<InventoryCount> Handle(CreateInventoryCountCommand command, CancellationToken ct = default)
     {
+        OperationsIdentity.RequireActor(currentUser.User, command.UserId);
         OperationsRules.Id(command.UserId);
         OperationsRules.Text(command.Notes, 500, "notas", optional: true);
         if (command.Items == null || command.Items.Count == 0)

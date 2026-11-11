@@ -5,9 +5,12 @@ using BodeGo.API.IAM.Domain.Model.Queries;
 using BodeGo.API.IAM.Interfaces.REST.Resources;
 using BodeGo.API.IAM.Interfaces.REST.Transform;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using BodeGo.API.IAM.Infrastructure.Authentication;
 namespace BodeGo.API.IAM.Interfaces.REST;
 
 [ApiController]
+[Authorize(Policy = IamAuthenticationExtensions.Administrator)]
 [Tags("IAM")]
 [Route("api/v1/users")]
 public class UsersController(IUserCommandService commands, IUserQueryService queries) : ControllerBase

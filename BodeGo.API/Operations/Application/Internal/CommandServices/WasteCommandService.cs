@@ -5,11 +5,13 @@ using BodeGo.API.Operations.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Commands;
 using BodeGo.API.Operations.Domain.Repositories;
 using BodeGo.API.Operations.Domain.Services;
+using BodeGo.API.IAM.Application.Services;
 namespace BodeGo.API.Operations.Application.Internal.CommandServices;
-public class WasteCommandService(IOperationsRepository repository, IOperationsSession session) : IWasteCommandService
+public class WasteCommandService(IOperationsRepository repository, IOperationsSession session, ICurrentUser currentUser) : IWasteCommandService
 {
     public Task<Waste> Handle(CreateWasteCommand command, CancellationToken ct = default)
     {
+        OperationsIdentity.RequireActor(currentUser.User, command.UserId);
         OperationsRules.Id(command.ProductId);
         OperationsRules.Id(command.UserId);
         OperationsRules.Lot(command.LotId);

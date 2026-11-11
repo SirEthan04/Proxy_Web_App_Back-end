@@ -5,9 +5,10 @@ using BodeGo.API.Commercial.Domain.Model.Commands;
 using BodeGo.API.Inventory.Domain.Model.Aggregates;
 using BodeGo.API.Operations.Domain.Model.Entities;
 using BodeGo.API.Operations.Domain.Model.ValueObjects;
+using BodeGo.API.IAM.Application.Services;
 namespace BodeGo.API.Commercial.Application.Internal.CommandServices;
 
-public class SaleConfirmationService(ICommercialConfirmationSession session) : ISaleConfirmationService
+public class SaleConfirmationService(ICommercialConfirmationSession session, ICurrentUser currentUser) : ISaleConfirmationService
 {
     public Task<SaleResult> Handle(ConfirmSaleCommand command, CancellationToken ct = default)
     {
@@ -16,8 +17,9 @@ public class SaleConfirmationService(ICommercialConfirmationSession session) : I
         {
             var sale = await session.LockSaleAsync(command.Id, ct)
                 ?? throw new CommercialConfirmationException("No se encontró la venta solicitada.", ConfirmationFailure.NotFound);
+            CommercialIdentity.Authorize(currentUser.User, sale.UserId);
             ConfirmationRules.Draft(sale.Status, sale.Items.Count);
-            if (!await session.IsActiveUserAsync(sale.UserId, ct))
+            if (!await session.IsActiveUserAsync(currentUser.User.Id, ct))
                 throw new CommercialConfirmationException("El usuario no existe o está inactivo.");
             var products = new Dictionary<Guid, Product>();
             foreach (var group in sale.Items.GroupBy(i => i.ProductId).OrderBy(g => g.Key))
@@ -49,7 +51,7 @@ public class SaleConfirmationService(ICommercialConfirmationSession session) : I
                     var quantity = Math.Min(remaining, lot.QuantityAvailable);
                     if (quantity == 0) continue;
                     product.RemoveStock(lot.Id, quantity);
-                    movements.Add(new InventoryMovement(product.Id, lot.Id, sale.UserId,
+                    movements.Add(new InventoryMovement(product.Id, lot.Id, currentUser.User.Id,
                         MovementType.Sale, -quantity, "Sale", sale.Id));
                     remaining -= quantity;
                     if (remaining == 0) break;

@@ -12,7 +12,6 @@ public sealed class CommercialItemResource
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class CreateCommercialResource
 {
-    [Required(ErrorMessage="El identificador del usuario es obligatorio.")] public Guid? UserId { get; init; }
     [Required(ErrorMessage="Debe incluir los detalles.")][MinLength(1,ErrorMessage="Debe incluir al menos un detalle.")] public List<CommercialItemResource> Items { get; init; } = [];
 }
 public sealed record CommercialItemResponse(Guid Id, Guid ProductId, Guid? LotId, int Quantity, decimal UnitAmount, decimal Subtotal);

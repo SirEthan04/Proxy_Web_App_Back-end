@@ -9,10 +9,10 @@ public static class InventoryCountResourceAssembler
         new(c.Id, c.UserId, c.CountedAt, c.Status.ToString(), c.Notes,
             c.Items.Select(i => new InventoryCountItemResource(i.Id, i.ProductId, i.LotId,
                 i.ExpectedQuantity, i.CountedQuantity, i.Difference)).ToArray());
-    public static CreateInventoryCountCommand ToCommand(CreateInventoryCountResource r)
+    public static CreateInventoryCountCommand ToCommand(CreateInventoryCountResource r, Guid userId)
     {
         if (r.Items.Any(i => i == null)) throw new OperationsException("Los detalles no pueden ser nulos.");
-        return new(r.UserId!.Value, r.Notes, r.Items.Select(i =>
+        return new(userId, r.Notes, r.Items.Select(i =>
             new CountItemCommand(i.ProductId!.Value, i.LotId, i.CountedQuantity!.Value)).ToArray());
     }
 }

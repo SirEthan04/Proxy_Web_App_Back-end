@@ -4,13 +4,19 @@ using BodeGo.API.Operations.Domain.Model.Queries;
 using BodeGo.API.Operations.Interfaces.REST.Resources;
 using BodeGo.API.Operations.Interfaces.REST.Transform;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using BodeGo.API.IAM.Application.Services;
+using BodeGo.API.IAM.Infrastructure.Authentication;
 namespace BodeGo.API.Operations.Interfaces.REST;
 [ApiController]
 [Tags("Operations")]
 [Route("api/v1/inventory-counts")]
-public class InventoryCountsController(IInventoryCountCommandService commands, IInventoryCountQueryService queries) : ControllerBase
+public class InventoryCountsController(IInventoryCountCommandService commands, IInventoryCountQueryService queries, ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = IamAuthenticationExtensions.Operations)]
+    [ProducesResponseType<ProblemDetails>(401)]
+    [ProducesResponseType<ProblemDetails>(403)]
     [ProducesResponseType<InventoryCountResource>(201)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
@@ -18,10 +24,10 @@ public class InventoryCountsController(IInventoryCountCommandService commands, I
     {
         try
         {
-            var count = await commands.Handle(InventoryCountResourceAssembler.ToCommand(resource), ct);
+            var count = await commands.Handle(InventoryCountResourceAssembler.ToCommand(resource, currentUser.User.Id), ct);
             return CreatedAtAction(nameof(GetById), new { id = count.Id }, InventoryCountResourceAssembler.From(count));
         }
-        catch (OperationsException e) { return Problem(statusCode: e.Conflict ? 409 : 400, title: e.Message); }
+        catch (OperationsException e) { return Problem(statusCode: e.Forbidden ? 403 : e.Conflict ? 409 : 400, title: e.Message); }
     }
     [HttpGet("{id}")]
     [ProducesResponseType<InventoryCountResource>(200)]
