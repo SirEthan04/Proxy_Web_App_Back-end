@@ -9,14 +9,10 @@ using Scalar.AspNetCore;
 using BodeGo.API.Monitoring.Infrastructure;
 using BodeGo.API.Reporting.Infrastructure;
 using BodeGo.API.IAM.Infrastructure.Authentication;
+using BodeGo.API.Shared.Infrastructure.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
-const string frontendCorsPolicy = "BodeGoFrontend";
-
-builder.Services.AddCors(options => options.AddPolicy(frontendCorsPolicy, policy =>
-    policy.WithOrigins("http://localhost:5174")
-        .AllowAnyMethod()
-        .AllowAnyHeader()));
+builder.Services.AddBodeGoHosting(builder.Configuration, builder.Environment);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -39,9 +35,7 @@ builder.Services.AddMonitoring();
 builder.Services.AddReporting();
 builder.Services.AddDbContext<BodeGoDbContext>(options =>
 {
-    var connection = builder.Configuration.GetConnectionString("DefaultConnection");
-    if (string.IsNullOrWhiteSpace(connection))
-        throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets.");
+    var connection = BodeGoHosting.DatabaseConnection(builder.Configuration, builder.Environment.IsDevelopment());
     options.UseMySQL(connection);
 });
 
@@ -78,9 +72,9 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference(options => options.WithTitle("BodeGo API"));
 }
 
-app.UseHttpsRedirection();
+app.UseBodeGoTransport();
 app.UseRouting();
-app.UseCors(frontendCorsPolicy);
+app.UseCors(BodeGoHosting.FrontendPolicy);
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
