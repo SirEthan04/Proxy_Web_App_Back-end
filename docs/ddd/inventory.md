@@ -235,38 +235,18 @@ Si todavía no existe tal flujo o esos datos, dejar esos casos de integración p
 
 ## Verificaciones sin MySQL
 
-Se sigue el formato de ejecutables de comprobación ya utilizado por IAM; no se añade otro framework de pruebas ni otro proveedor.
+Los proyectos de comprobación se retiraron de esta entrega. Desde la raíz:
 
 ```powershell
 dotnet restore
 dotnet build -c Release
-dotnet run --project tests/BodeGo.Checks -c Release
-dotnet run --project tests/BodeGo.IamChecks -c Release
-dotnet run --project tests/BodeGo.InventoryChecks -c Release
 ```
 
-Ejecutar IamChecks sin argumentos: sus modos adicionales sí pueden intentar integración.
-Los dobles de repositorios existen solo en tests/BodeGo.InventoryChecks. No son persistencia real.
-Inventory comprueba dominio, límites, servicios, proyecciones, estados de controladores invocados directamente, campos obligatorios, DI y generación SQL con el proveedor MySQL sin abrir conexión.
-
-Para comprobar exclusivamente OpenAPI sin conexión, iniciar otra terminal con:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-$env:ConnectionStrings__DefaultConnection = 'Server=127.0.0.1;Port=1;Database=bodego_openapi_only;User=unused;'
-dotnet BodeGo.API/bin/Release/net10.0/BodeGo.API.dll --urls http://127.0.0.1:5188
-```
-
-Esa cadena no operativa no se guarda en configuración ni se usa como prueba de base de datos.
-En otra terminal:
-
-```powershell
-dotnet run --project tests/BodeGo.InventoryChecks -c Release -- --openapi http://127.0.0.1:5188
-```
-
-Este modo solo solicita /openapi/v1.json y comprueba ocho operaciones Inventory y cinco IAM.
-Cerrar la terminal de documentación al terminar; usar la conexión real para integración.
-Si Debug está bloqueado por una instancia abierta, Release permite compilar sin interrumpirla.
+Con la API iniciada en Development, revisar manualmente `/openapi/v1.json` y los
+contratos Inventory en Scalar. Consultar la sección de procedimiento manual de esta
+guía para comprobar respuestas y persistencia; no sustituir una comprobación real
+con MySQL por una compilación. Los resultados siguientes corresponden a las suites
+históricas, anteriores a su retiro, y no son comandos ejecutables de esta entrega.
 
 ## Integración pendiente antes del merge
 

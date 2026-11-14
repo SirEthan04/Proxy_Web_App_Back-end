@@ -268,70 +268,28 @@ FROM inventory_movements WHERE product_id = @product_id;
 
 Todos los indicadores deben ser 1. GET del conteo debe coincidir con cabecera y detalles.
 
-## Pruebas automatizadas
+## Comprobación y resultados históricos
+
+Los proyectos de comprobación se retiraron de esta entrega. Para compilar:
 
 ```powershell
 dotnet restore
 dotnet build
-dotnet run --project tests/BodeGo.Checks
-dotnet run --project tests/BodeGo.IamChecks
-dotnet run --project tests/BodeGo.InventoryChecks
-dotnet run --project tests/BodeGo.OperationsChecks
 ```
 
-Si dotnet no está en PATH, añadir temporalmente la instalación local del SDK.
-OperationsChecks ejecuta reglas, servicios, consultas, metadatos/SQL del proveedor,
-HTTP sobre Kestrel con puertos dobles y las cinco etiquetas OpenAPI. Comprueba
-productos/usuarios inexistentes, lote ajeno, cantidades inválidas, motivo, stock
-insuficiente, descuentos por lote y distribuidos, trazabilidad y conteos sin cambios
-de stock. Comprueba 200/201/400/404/409 y JSON/detalles incompletos.
+Usar los casos manuales en Scalar y las consultas de Workbench descritos en esta
+guía. Las escrituras necesitan JWT y una base de demostración autorizada; no usar
+la base habitual para insertar datos de prueba sin aprobación.
 
-Resultado actualizado: OperationsChecks aprobó 52 comprobaciones con HTTP/JWT
-y dobles explícitos de persistencia/identidad. Conserva los escenarios anteriores
-y agrega 401 sin token y rechazo de userId. AuthenticationChecks aprobó
-129 comprobaciones sin MySQL y 110 comprobaciones HTTP/MySQL reales, incluyendo
-mermas/conteos autenticados. OpenAPI conserva las 32 operaciones.
+Antes del retiro se aprobaron 52 comprobaciones de Operations con dobles,
+129 verificaciones de autenticación sin MySQL y 110 HTTP/MySQL reales en una base
+aislada. También se comprobaron rollback y concurrencia. Son resultados históricos,
+no verificaciones repetidas tras eliminar los proyectos.
 
-### Integración optativa de rollback y concurrencia real
-
-Preparar por separado una base **desechable** cuyo nombre comience por
-bodego_operations_test, con la migración inicial existente aplicada y motor InnoDB.
-Configurar BODEGO_OPERATIONS_TEST_CONNECTION fuera de Git (no imprimirla).
-
-```powershell
-dotnet run --project tests/BodeGo.OperationsChecks -- --mysql
-```
-
-La prueba exige una base local con prefijo bodego_operations_test o
-bodego_test_autenticacion_. Inserta datos propios
-identificados como Operations test, sin borrar historia ni crear tablas. Inyecta
-un fallo justo después de SaveChanges, verifica desde otro DbContext que producto,
-lote, merma y movimientos se revirtieron, y luego coordina dos solicitudes que
-leen el mismo stock 10 e intentan descontar 6 cada una. Debe haber un éxito y un
-conflicto, stock y lote finales 4, una merma y delta -6. Finalmente registra/consulta
-un conteo y verifica stock y movimientos intactos. Los datos quedan en la base
-desechable para revisión. Esta variante se ejecutó correctamente desde la suite
-de autenticación en la misma base aislada que sus pruebas HTTP:
-`bodego_test_autenticacion_20261111210853_a4b0cfea`.
-
-Para crear una base aislada nueva, aplicar sólo la migración existente y ejecutar
-IAM, Commercial y Operations con la misma conexión:
-
-```powershell
-dotnet run --project tests/BodeGo.AuthenticationChecks -- --mysql
-```
-
-La suite prepara y restaura `BODEGO_OPERATIONS_TEST_CONNECTION` sólo en memoria.
-La prueba optativa acepta también el prefijo local `bodego_test_autenticacion_`.
-No escribe en `bodego_db`, no elimina bases anteriores y deja las fixtures para revisar.
-Los servicios directos de rollback/concurrencia usan un actor de prueba explícito;
-las pruebas HTTP de mermas/conteos usan JWT y usuarios reales de esa base aislada.
-
-El flujo HTTP comprobó: compra 20, venta 3, merma 2 → stock/lote 15;
+El flujo HTTP histórico fue: compra 20, venta 3, merma 2 → stock/lote 15;
 conteo físico 14 → diferencia -1, sin cambiar stock ni crear movimientos.
-La merma y sus movimientos guardan al Empleado autenticado; el conteo guarda al
-Administrador autenticado. POST con userId, token inválido o usuario desactivado
-se rechazaron sin modificar el inventario.
+Las mermas y conteos conservaron el actor autenticado y se rechazó userId arbitrario.
+La retirada de pruebas no cambia esos contratos ni la implementación de producción.
 
 ## Coordinación pendiente con el equipo
 

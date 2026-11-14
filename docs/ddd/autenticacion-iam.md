@@ -266,53 +266,24 @@ de las pruebas sólo se insertaron en bases ficticias aisladas con claves aleato
    intentos de login (429).
 8. Para pruebas que cambien datos usar la base aislada, no `bodego_db`.
 
-## Pruebas reproducibles
+## Verificación de la entrega
 
-Las suites son ejecutables de comprobación, no proyectos xUnit. Ejecutar
-`dotnet test` no sustituye sus comandos `dotnet run`.
-
-Si la API abierta bloquea su ejecutable, conservar el proceso y compilar en una
-carpeta temporal:
+Los proyectos de comprobación se retiraron del repositorio. Para compilar y publicar
+sin interrumpir una API abierta se pueden usar artefactos temporales:
 
 ```powershell
-dotnet restore BodeGo.sln --artifacts-path "$env:TEMP/BodeGo-autenticacion-artifacts"
-dotnet build BodeGo.sln --no-restore --artifacts-path "$env:TEMP/BodeGo-autenticacion-artifacts"
-
-$checks = @(
-  'BodeGo.Checks', 'BodeGo.IamChecks', 'BodeGo.InventoryChecks',
-  'BodeGo.CommercialChecks', 'BodeGo.OperationsChecks',
-  'BodeGo.MonitoringReportingChecks', 'BodeGo.AuthenticationChecks'
-)
-foreach ($check in $checks) {
-  dotnet run --project "tests/$check" --artifacts-path "$env:TEMP/BodeGo-autenticacion-artifacts"
-  if ($LASTEXITCODE -ne 0) { throw "Falló $check" }
-}
+dotnet restore BodeGo.sln --artifacts-path "$env:TEMP/BodeGo-entrega-artifacts"
+dotnet build BodeGo.sln --no-restore --artifacts-path "$env:TEMP/BodeGo-entrega-artifacts"
+dotnet publish BodeGo.API -c Release --artifacts-path "$env:TEMP/BodeGo-entrega-artifacts" -o "$env:TEMP/BodeGo-entrega-publish"
 ```
 
-Inspeccionar las bases anteriores sin escribir:
+Para verificar autenticación usar los casos manuales de Scalar de esta guía y
+comprobar las 32 operaciones en OpenAPI desde Development. No escribir datos en la
+base habitual para comprobar compilación o documentación. Las pruebas que necesitan
+crear usuarios u operaciones requieren una base aislada y autorización expresa.
 
-```powershell
-dotnet run --project tests/BodeGo.AuthenticationChecks --artifacts-path "$env:TEMP/BodeGo-autenticacion-artifacts" -- --inspect-mysql
-```
-
-Pruebas reales, **crean una base aislada nueva** por ejecución:
-
-```powershell
-dotnet run --project tests/BodeGo.AuthenticationChecks --artifacts-path "$env:TEMP/BodeGo-autenticacion-artifacts" -- --mysql
-```
-
-El comando lee la conexión local segura para conectarse al servidor; reemplaza
-el nombre de base por `bodego_test_autenticacion_<fecha>_<sufijo>` antes de migrar
-o escribir. No copia datos, contraseñas o hashes de la base habitual. Aplica sólo
-la migración inicial existente, crea fixtures ficticias y levanta Kestrel en un
-puerto libre. Tanto los controladores como las verificaciones y pruebas de rollback
-usan esa misma base aislada. No elimina bases ni registros al finalizar.
-
-La integración comercial independiente ahora exige `BODEGO_TEST_MYSQL_CONNECTION`
-con una base local `bodego_test_*` y `BODEGO_TEST_ACCESS_TOKEN` válido de una API
-apuntando a esa misma base. No usar credenciales como argumentos ni pegarlas en
-documentos. La suite de autenticación configura esas variables sólo en memoria
-mientras invoca la integración comercial, y después restaura los valores previos.
+Los resultados de las secciones siguientes se conservan como evidencia histórica
+anterior al retiro de las suites; los comandos automatizados ya no están disponibles.
 
 ## Resultado de la reanudación (11 de noviembre de 2026)
 

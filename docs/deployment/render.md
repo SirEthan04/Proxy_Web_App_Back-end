@@ -177,14 +177,22 @@ En Vue configurar su URL base con el HTTPS del backend según el cliente Axios
 existente, sin duplicar `/api/v1`. El login continúa enviando JSON y las operaciones
 protegidas usan `Authorization: Bearer <token>`. No cambiar contratos por Docker.
 
-## Verificación automatizada
+## Verificación de la entrega
 
-Ejecutar las siete suites existentes y la nueva `tests/BodeGo.DeploymentChecks`.
-Esta última admite `--api <ruta/BodeGo.API.dll>` para arrancar un proceso propio en
-Production con host MySQL inexistente y clave efímera: comprueba CORS, rechazos 401,
-documentación 404, configuración de proxies y bloqueo de inicializadores en Production.
-No consulta ni escribe MySQL. AuthenticationChecks comprueba las 32 operaciones en
-Development. Una publicación para linux-x64 no sustituye construir/ejecutar Docker.
+Los ocho proyectos de comprobación se retiraron de esta entrega. Compilar y publicar
+únicamente la solución y BodeGo.API; el Dockerfile no depende de proyectos de pruebas:
+
+```powershell
+dotnet restore
+dotnet build
+dotnet publish BodeGo.API -c Release
+```
+
+Para comprobación manual usar los comandos HTTP de la sección anterior. Revisar las
+32 operaciones en `/openapi/v1.json` únicamente en Development; en Production la
+documentación sigue deshabilitada. Una publicación para Linux no sustituye construir
+y ejecutar una imagen Docker. Los resultados siguientes son históricos, anteriores
+al retiro de los ejecutables de pruebas.
 
 ## Resultado de esta preparación
 

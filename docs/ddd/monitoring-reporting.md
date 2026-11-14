@@ -111,42 +111,19 @@ Confirm como método de dominio, falta el flujo transaccional completo de Commer
 Esta entrega no lo implementa ni cambia estados con SQL. Operations y Commercial
 deberán coordinar inventario/movimientos cuando implementen esas funcionalidades.
 
-## Pruebas reproducibles
+## Comprobación manual
 
-Desde la raíz, con .NET 10:
+Los proyectos de pruebas se retiraron de esta entrega. Para compilar desde la raíz:
 
 ```powershell
 dotnet restore
 dotnet build
-dotnet run --project tests/BodeGo.Checks
-dotnet run --project tests/BodeGo.IamChecks
-dotnet run --project tests/BodeGo.InventoryChecks
-dotnet run --project tests/BodeGo.OperationsChecks
-dotnet run --project tests/BodeGo.MonitoringReportingChecks
 ```
 
-El último comando sin argumentos ejecuta pruebas unitarias con dobles explícitos:
-alerta existente/ausente, lista vacía, GUID, mapeo UTC, rangos, formato, límites y
-contratos de controladores. Eso no demuestra acceso real a MySQL.
-
-Con DefaultConnection mediante User Secrets y la migración común aplicada, iniciar
-la API en una terminal y ejecutar la integración en otra:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-dotnet run --project BodeGo.API --launch-profile http
-# Otra terminal, mismo entorno Development:
-dotnet run --project tests/BodeGo.MonitoringReportingChecks -- --integration http://localhost:5281
-```
-
-La integración solo admite API local y bodego_db en localhost/127.0.0.1:3306.
-No imprime credenciales ni crea datos. Compara respuestas con ventas/detalles reales,
-comprueba OpenAPI, códigos HTTP y conserva el stock/versión de los productos.
-Después ejecuta el MISMO SQL de los repositorios contra CTE virtuales de prueba
-que sombrean los nombres sales/sale_items/products solo durante esos SELECT.
-Estas fixtures conocidas prueban Draft/Cancelled/Confirmed, suma 19.50, cantidades
-7 y 5, orden, límite y caso vacío. No son ventas reales, no pasan por endpoints
-y no se insertan, actualizan ni eliminan registros. Requieren MySQL 8 o posterior.
+Con la API iniciada en Development, usar los casos de Scalar y las consultas de solo
+lectura de Workbench de las secciones siguientes. No generar ventas ni alertas para
+simular resultados: una base sin datos confirmados devuelve listas vacías y ceros.
+Los resultados siguientes son históricos y proceden de las suites ya retiradas.
 
 Resultado observado: MySQL tenía alerts vacía y cero ventas confirmadas. Las consultas
 reales devolvieron listas vacías/resumen cero. La lectura de una alerta existente
