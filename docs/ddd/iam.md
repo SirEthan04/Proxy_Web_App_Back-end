@@ -73,49 +73,18 @@ No cambia el esquema ni crea migraciones.
 
 ## Compilar y comprobar
 
+Los proyectos de comprobación se retiraron de esta entrega. Para compilar desde
+la raíz, sin ejecutar operaciones en MySQL:
+
 ```powershell
 dotnet restore
 dotnet build
-dotnet run --project tests/BodeGo.Checks
-dotnet run --project tests/BodeGo.IamChecks
 ```
 
-Las comprobaciones originales validan dominio y modelo sin conexion. El comando IAM
-sin argumentos prueba Application con dobles en memoria y verifica hashing; esos
-resultados NO prueban HTTP ni MySQL. No requieren paquetes de pruebas adicionales.
-
-Para probar la integracion real, primero verificar el destino sin escribir datos:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-dotnet run --project tests/BodeGo.IamChecks -- --preflight
-```
-
-Solo acepta localhost o 127.0.0.1, puerto 3306, base bodego_db, con la migracion
-ya aplicada. No muestra la cadena de conexion ni las excepciones SQL completas.
-En una terminal levantar la API y en otra ejecutar las pruebas:
-
-```powershell
-# Terminal 1: entorno local de desarrollo
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-dotnet run --project BodeGo.API --no-launch-profile --urls http://127.0.0.1:5287
-
-# Terminal 2
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-dotnet run --project tests/BodeGo.IamChecks -- --integration http://127.0.0.1:5287
-```
-
-La integracion comprueba los cinco endpoints y los codigos 201/200/400/404/409.
-Inicializa roles dos veces para verificar repetibilidad. Crea mediante POST un solo
-usuario identificable, `iam.verificacion@bodego.example`, nombre Prueba IAM desarrollo,
-rol Empleado, con contraseña aleatoria en memoria. Comprueba su insercion directamente
-con EF y verifica el hash con la contraseña enviada. La contraseña no se imprime ni
-se guarda como archivo y este usuario no se prepara como cuenta de acceso manual.
-Si el correo ya existe, reutiliza el registro para GET y duplicados; informa expresamente
-que no hubo nueva insercion ni nueva verificacion de su contraseña en esa ejecucion.
-No se eliminan usuarios. Un fallo no se reporta como exito; investigar localmente
-sin compartir secretos. Para repetir una prueba de insercion nueva, acordar otro
-identificador de desarrollo, sin borrar registros existentes.
+La comprobación funcional se realiza con los contratos y casos manuales de esta
+guía y de [autenticación IAM](autenticacion-iam.md). Las rutas administrativas
+requieren un JWT válido de Administrador. Los resultados de la sección siguiente
+son históricos, anteriores al retiro de los ejecutables de pruebas.
 
 ## Resultado comprobado
 

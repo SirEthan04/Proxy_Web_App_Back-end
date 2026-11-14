@@ -279,38 +279,18 @@ continuar con nuevas operaciones válidas, conservando historia.
 
 ## Pruebas automatizadas y resultado observado
 
-La integración actual debe ejecutarse en una base aislada con un JWT válido.
-El comando de autenticación prepara ambos y ejecuta también la suite comercial:
-
-```powershell
-dotnet run --project tests/BodeGo.AuthenticationChecks -- --mysql
-```
-
-Esto crea una base nueva `bodego_test_autenticacion_*`; nunca utiliza `bodego_db`
-para escrituras. Para revisar bases anteriores sin escribir, usar `--inspect-mysql`.
+Los ejecutables de pruebas se retiraron de esta entrega. Para verificar compilación:
 
 ```powershell
 dotnet restore
 dotnet build
-dotnet run --project tests/BodeGo.CommercialChecks
-# Sólo con una API apuntando a una base aislada bodego_test_*:
-# Configurar BODEGO_TEST_MYSQL_CONNECTION y BODEGO_TEST_ACCESS_TOKEN localmente,
-# sin publicar sus valores. El token debe pertenecer a esa misma API/base.
-$env:ASPNETCORE_ENVIRONMENT = 'Development'
-dotnet run --project tests/BodeGo.CommercialChecks -- --integration http://localhost:5281
 ```
 
-Las unitarias usan una sesión doble explícita y NO prueban transacciones reales.
-Cubren 20 casos: flujo 0/20/17, reposición de un lote, detalles repetidos, reserva
-explícita antes de FIFO, estados no Draft, lote ajeno, exceso y overflow sin mutación.
-
-La integración rechaza destinos que no sean API local y una base `bodego_test_*`
-en localhost o 127.0.0.1; exige la migración aplicada, siete tablas InnoDB y una
-identidad JWT activa que pertenezca a esa base.
-Crea dos productos y una categoría por ejecución, identificados con un sufijo único;
-usa los POST existentes para crear borradores y las confirmaciones reales para cambiar
-stock. No modifica productos previos ni borra filas. Cada ejecución crea fixtures
-nuevas deliberadamente para medir stock desde cero; no duplicar ejecuciones sin necesidad.
+Para comprobación funcional usar el flujo manual y las consultas SQL de esta guía,
+con JWT válido y una base de demostración autorizada. No crear operaciones de prueba
+sobre datos importantes. Los resultados descritos a continuación son históricos,
+obtenidos antes del retiro de las suites; no implican que sigan disponibles para
+volver a ejecutarlas desde este repositorio.
 
 Se aprobaron **131 comprobaciones HTTP/MySQL reales**. Además del flujo manual,
 prueba varios detalles, dos líneas sobre un mismo lote, errores 400/404/409, rechazo

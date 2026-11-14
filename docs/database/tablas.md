@@ -128,7 +128,6 @@ un destino local sin contraseña si falta conexión; eso no verifica ni aplica n
 dotnet tool restore
 dotnet restore
 dotnet build
-dotnet run --project tests/BodeGo.Checks
 dotnet ef migrations has-pending-model-changes --project BodeGo.API
 ```
 
